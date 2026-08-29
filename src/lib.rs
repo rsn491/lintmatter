@@ -10,6 +10,7 @@ pub mod cli;
 pub mod config;
 pub mod discover;
 pub mod fence;
+pub mod init;
 pub mod lint;
 pub mod parse;
 pub mod report;
