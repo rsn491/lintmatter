@@ -765,7 +765,7 @@ mod tests {
 
         for (name, dir, src, want) in cases {
             let (_base, target) = write_skill(dir, &src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(res.score, want, "{name}");
         }
     }
@@ -777,17 +777,17 @@ mod tests {
         let src = "---\nname: Bad_Name\ndescription: Use this skill for a fixture.\n---\nBody.\n";
         let (_base, target) = write_skill("Bad_Name", src);
 
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert_eq!(res.score, 87);
 
         let mut cfg = generous_config();
         cfg.strict = true;
-        let res = Linter::new(cfg, None).file(&target).unwrap();
+        let res = Linter::new(cfg).file(&target).unwrap();
         assert_eq!(res.score, 87);
 
         let mut cfg = generous_config();
         cfg.disabled = vec![RULE_NAME_FORMAT.to_string()];
-        let res = Linter::new(cfg, None).file(&target).unwrap();
+        let res = Linter::new(cfg).file(&target).unwrap();
         assert_eq!(res.score, 100);
     }
 
@@ -807,7 +807,7 @@ mod tests {
             (200, 0),
             (900, 0),
         ] {
-            let linter = Linter::new(cfg.clone(), Some(Box::new(Fixed(count))));
+            let linter = Linter::new(cfg.clone()).with_counter(Box::new(Fixed(count)));
             let res = linter.file(&target).unwrap();
             assert_eq!(res.score, want, "{count} tokens against a 100 token budget");
         }
@@ -821,7 +821,8 @@ mod tests {
         let mut cfg = generous_config();
         // Only the body is budgeted, and it sits at twice its limit.
         cfg.max_skill_tokens = 1;
-        let res = Linter::new(cfg.clone(), Some(Box::new(Fixed(2))))
+        let res = Linter::new(cfg.clone())
+            .with_counter(Box::new(Fixed(2)))
             .file(&target)
             .unwrap();
         // Front matter is perfect, the one budget that ran scores zero.
@@ -829,7 +830,8 @@ mod tests {
 
         // Budget the name too and it passes, pulling the token part back to 50.
         cfg.max_skill_name_tokens = 2;
-        let res = Linter::new(cfg, Some(Box::new(Fixed(2))))
+        let res = Linter::new(cfg)
+            .with_counter(Box::new(Fixed(2)))
             .file(&target)
             .unwrap();
         assert_eq!(res.score, 75);
@@ -840,7 +842,7 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         write_file(base.path(), "there.md", "Present.\n");
         let target = agents_target(base.path(), "See [there](./there.md).\n");
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert_eq!(res.score, 100);
 
         let base = tempfile::tempdir().unwrap();
@@ -849,7 +851,7 @@ mod tests {
             base.path(),
             "See [there](./there.md) and [gone](./gone.md).\n",
         );
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert_eq!(res.score, 0);
     }
 
@@ -859,7 +861,7 @@ mod tests {
     fn parts_with_nothing_to_judge_drop_out() {
         let base = tempfile::tempdir().unwrap();
         let target = agents_target(base.path(), "Body with no references.\n");
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert_eq!(res.score, 100);
 
         // Give it a broken reference and a body twice its budget: the two parts
@@ -867,7 +869,8 @@ mod tests {
         let target = agents_target(base.path(), "See [gone](./gone.md).\n");
         let mut cfg = generous_config();
         cfg.max_agents_tokens = 100;
-        let res = Linter::new(cfg, Some(Box::new(Fixed(200))))
+        let res = Linter::new(cfg)
+            .with_counter(Box::new(Fixed(200)))
             .file(&target)
             .unwrap();
         assert_eq!(res.score, 0);
@@ -1327,7 +1330,7 @@ mod tests {
         for (name, src, want) in cases {
             let dir = tempfile::tempdir().unwrap();
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(rule_ids(&res.findings), *want, "{name}");
         }
 
@@ -1336,7 +1339,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         write_file(dir.path(), "notes.md", "notes");
         let target = agents_target(dir.path(), "See [`notes`](./notes.md).\n");
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert!(res.findings.is_empty());
     }
 }
