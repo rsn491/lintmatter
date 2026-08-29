@@ -113,9 +113,8 @@ mod tests {
                 },
                 score: 50,
                 findings: vec![Finding {
-                    file: "AGENTS.md".to_string(),
                     line: 0,
-                    rule: crate::lint::RULE_TOKENS_CONTENT.to_string(),
+                    rule: crate::lint::RULE_TOKENS_CONTENT,
                     severity: Severity::Error,
                     message: "content is 6,142 tokens, over the 5,000 token limit".to_string(),
                 }],
@@ -130,9 +129,8 @@ mod tests {
                 },
                 score: 96,
                 findings: vec![Finding {
-                    file: "skills/thing/SKILL.md".to_string(),
                     line: 2,
-                    rule: crate::lint::RULE_NAME_DIR_MISMATCH.to_string(),
+                    rule: crate::lint::RULE_NAME_DIR_MISMATCH,
                     severity: Severity::Warning,
                     message: "name \"other\" does not match its directory \"thing\"".to_string(),
                 }],
