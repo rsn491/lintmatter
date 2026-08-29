@@ -183,6 +183,20 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
         break;
     }
     if open == -1 {
+        // No fence at the top. A `---` block further down may still be front
+        // matter someone put in the wrong place, so say so rather than
+        // reporting the vaguer "missing front matter".
+        if let Some(line) = misplaced_frontmatter(&lines) {
+            return (
+                Frontmatter::default(),
+                text.clone(),
+                Some(Error {
+                    kind: ErrKind::NotFirst,
+                    line,
+                    msg: "front matter must start on the first line of the file".to_string(),
+                }),
+            );
+        }
         return (Frontmatter::default(), text, None);
     }
     if open > 0 {
@@ -293,6 +307,49 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
 
 /// Renders a scalar YAML node as a string. Shared with the config loader,
 /// which reads the same flavor of YAML.
+/// Finds a `---` block below the top of the file that is really misplaced
+/// front matter, returning its 1-based opening line.
+///
+/// The test is deliberately strict, because `---` is also how markdown writes
+/// a thematic break: the block must close, parse as a YAML mapping, and carry
+/// `name` or `description`. A horizontal rule cannot satisfy that, so ordinary
+/// prose is never flagged.
+fn misplaced_frontmatter(lines: &[&str]) -> Option<usize> {
+    for (i, line) in lines.iter().enumerate() {
+        if !OPEN_FENCE_RE.is_match(fence_line(line)) {
+            continue;
+        }
+        // A candidate that does not close is not front matter, but the scan
+        // continues: a real block may still follow it.
+        let Some(close) = lines
+            .iter()
+            .enumerate()
+            .skip(i + 1)
+            .find(|(_, l)| CLOSE_FENCE_RE.is_match(fence_line(l)))
+            .map(|(j, _)| j)
+        else {
+            continue;
+        };
+        let block = lines[i + 1..close].join("\n");
+        let Ok(docs) = MarkedYaml::load_from_str(&block) else {
+            continue;
+        };
+        let Some(root) = docs.into_iter().next() else {
+            continue;
+        };
+        let YamlData::Mapping(map) = &root.data else {
+            continue;
+        };
+        let names_a_skill = map.keys().any(|k| {
+            scalar_string(&k.data).is_some_and(|key| key == "name" || key == "description")
+        });
+        if names_a_skill {
+            return Some(i + 1);
+        }
+    }
+    None
+}
+
 pub fn scalar_string<'a>(data: &YamlData<'a, MarkedYaml<'a>>) -> Option<String> {
     match data {
         YamlData::Value(scalar) => Some(stringify_scalar(scalar)),
@@ -416,6 +473,72 @@ mod tests {
                 !err.msg.contains('\n'),
                 "{name}: message should be one line"
             );
+        }
+    }
+
+    #[test]
+    fn misplaced_frontmatter_is_distinguished_from_a_thematic_break() {
+        // Reported: a `---` block below the top that really is front matter.
+        let cases: &[(&str, &str)] = &[
+            (
+                "after a heading",
+                "# My Skill\n\n---\nname: my-skill\ndescription: Does a thing.\n---\nBody.\n",
+            ),
+            (
+                "after prose",
+                "Some intro.\n\n---\ndescription: Does a thing.\n---\nBody.\n",
+            ),
+        ];
+        for (name, src) in cases {
+            let d = Document::parse(src.as_bytes());
+            let err = d.error.unwrap_or_else(|| panic!("{name}: want an error"));
+            assert_eq!(err.kind, ErrKind::NotFirst, "{name}");
+            assert_eq!(err.line, 3, "{name}");
+        }
+
+        // A candidate fence that never closes must not stop the scan: real
+        // front matter can still follow it.
+        let d = Document::parse(
+            b"# Title\n\n---\n\nA break with no partner.\n\n---\nname: late-skill\ndescription: Real front matter, in the wrong place.\n---\n",
+        );
+        let err = d.error.expect("want an error after an unclosed candidate");
+        assert_eq!(err.kind, ErrKind::NotFirst);
+        assert_eq!(err.line, 7);
+
+        // Not reported: `---` used as a thematic break, which is what most
+        // `---` in markdown is. Flagging these would be far worse than the
+        // vaguer message they replace.
+        let quiet: &[(&str, &str)] = &[
+            ("thematic break", "# Title\n\n---\n\nA new section.\n"),
+            (
+                "setext underline",
+                "Title\n---\n\nBody text under a setext heading.\n",
+            ),
+            (
+                "block without skill keys",
+                "# Title\n\n---\nfoo: bar\n---\n\nBody.\n",
+            ),
+            (
+                "block that never closes",
+                "# Title\n\n---\nname: unclosed\n",
+            ),
+            (
+                "unparseable block",
+                "# Title\n\n---\nname: ok\n  bad: indent\n---\n",
+            ),
+            (
+                "two thematic breaks",
+                "# Title\n\n---\n\nSection.\n\n---\n\nAnother.\n",
+            ),
+        ];
+        for (name, src) in quiet {
+            let d = Document::parse(src.as_bytes());
+            assert!(
+                d.error.is_none(),
+                "{name}: unexpected {:?}",
+                d.error.map(|e| e.msg)
+            );
+            assert!(!d.frontmatter.present, "{name}");
         }
     }
 
