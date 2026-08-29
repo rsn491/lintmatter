@@ -294,25 +294,33 @@ pub struct Linter {
 }
 
 impl Linter {
-    /// Returns a Linter anchored to the process's working directory. `None`
-    /// for `counter` falls back to the heuristic estimator.
-    pub fn new(cfg: Config, counter: Option<Box<dyn Counter>>) -> Self {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        Self::with_cwd(cfg, counter, cwd)
+    /// Returns a Linter using the heuristic token estimator, anchored to the
+    /// process's working directory. Override either with [`Self::with_counter`]
+    /// or [`Self::with_cwd`].
+    pub fn new(cfg: Config) -> Self {
+        let disabled = cfg.disabled.iter().cloned().collect();
+        let linter = Linter {
+            cfg,
+            counter: Box::new(tokens::Estimator::new()),
+            disabled,
+            cwd: PathBuf::new(),
+        };
+        // Resolved once, here, so that no rule reaches for process state later.
+        linter.with_cwd(std::env::current_dir().unwrap_or_default())
     }
 
-    /// Returns a Linter that treats `cwd` as the working directory, so the one
-    /// rule that cares can be tested without mutating process-global state
-    /// while other tests run alongside it.
-    pub fn with_cwd(cfg: Config, counter: Option<Box<dyn Counter>>, cwd: PathBuf) -> Self {
-        let counter = counter.unwrap_or_else(|| Box::new(tokens::Estimator::new()));
-        let disabled = cfg.disabled.iter().cloned().collect();
-        Linter {
-            cfg,
-            counter,
-            disabled,
-            cwd,
-        }
+    /// Counts tokens with `counter` instead of the heuristic estimator.
+    pub fn with_counter(mut self, counter: Box<dyn Counter>) -> Self {
+        self.counter = counter;
+        self
+    }
+
+    /// Treats `cwd` as the working directory, so the one rule that cares can
+    /// be tested without mutating process-global state while other tests run
+    /// alongside it.
+    pub fn with_cwd(mut self, cwd: PathBuf) -> Self {
+        self.cwd = cwd;
+        self
     }
 
     /// Reads and lints one target.
@@ -656,7 +664,7 @@ mod tests {
 
         for (name, skill_dir_name, src, want_rules) in cases {
             let (_base, target) = write_skill(skill_dir_name, &src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(rule_ids(&res.findings), want_rules, "{name}");
         }
     }
@@ -667,7 +675,7 @@ mod tests {
 
         let mut cfg = generous_config();
         cfg.max_skill_tokens = 1;
-        let res = Linter::new(cfg, None).file(&target).unwrap();
+        let res = Linter::new(cfg).file(&target).unwrap();
         assert_eq!(
             rule_ids(&res.findings),
             vec![RULE_NAME_DIR_MISMATCH, RULE_TOKENS_CONTENT]
@@ -675,12 +683,12 @@ mod tests {
 
         let mut cfg = generous_config();
         cfg.max_skill_tokens = 0;
-        let res = Linter::new(cfg, None).file(&target).unwrap();
+        let res = Linter::new(cfg).file(&target).unwrap();
         assert_eq!(rule_ids(&res.findings), vec![RULE_NAME_DIR_MISMATCH]);
 
         let mut cfg = generous_config();
         cfg.max_skill_name_tokens = 1;
-        let res = Linter::new(cfg, None).file(&target).unwrap();
+        let res = Linter::new(cfg).file(&target).unwrap();
         assert_eq!(
             rule_ids(&res.findings),
             vec![RULE_NAME_DIR_MISMATCH, RULE_TOKENS_NAME]
@@ -688,13 +696,13 @@ mod tests {
 
         let mut cfg = generous_config();
         cfg.max_skill_description_tokens = 2;
-        let res = Linter::new(cfg, None).file(&target).unwrap();
+        let res = Linter::new(cfg).file(&target).unwrap();
         assert_eq!(
             rule_ids(&res.findings),
             vec![RULE_NAME_DIR_MISMATCH, RULE_TOKENS_DESCRIPTION]
         );
 
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert!(res.tokens.content > 0 && res.tokens.name > 0 && res.tokens.description > 0);
     }
 
@@ -878,7 +886,7 @@ mod tests {
         let mut cfg = generous_config();
         cfg.max_skill_tokens = 10000;
         cfg.max_agents_tokens = 1;
-        let linter = Linter::new(cfg.clone(), None);
+        let linter = Linter::new(cfg.clone());
 
         let agents_res = linter.file(&agents).unwrap();
         assert_eq!(agents_res.errors(), 1);
@@ -893,7 +901,7 @@ mod tests {
 
         cfg.max_agents_tokens = 0;
         cfg.max_skill_tokens = 1;
-        let skill_res = Linter::new(cfg, None).file(&skill).unwrap();
+        let skill_res = Linter::new(cfg).file(&skill).unwrap();
         assert!(
             skill_res
                 .findings
@@ -909,7 +917,7 @@ mod tests {
             "---\ntitle: Project instructions\nowner: infra\n---\n\n# Instructions\n\nBody.\n";
         let target = agents_target(base.path(), src);
 
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert!(res.findings.is_empty());
         assert!(res.tokens.content > 0);
     }
@@ -920,7 +928,7 @@ mod tests {
         let src = "---\ntitle: Project instructions\n\n# Instructions never closed\n";
         let target = agents_target(base.path(), src);
 
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert_eq!(rule_ids(&res.findings), vec![RULE_FRONTMATTER_UNTERMINATED]);
     }
 
@@ -933,10 +941,45 @@ mod tests {
         let base2 = tempfile::tempdir().unwrap();
         let bare = agents_target(base2.path(), "Body.\n");
 
-        let linter = Linter::new(generous_config(), None);
+        let linter = Linter::new(generous_config());
         let with_res = linter.file(&with_fm).unwrap();
         let bare_res = linter.file(&bare).unwrap();
         assert_eq!(with_res.tokens.content, bare_res.tokens.content);
+    }
+
+    /// Counts every string as a fixed number of tokens, so a test can tell
+    /// which counter a budget was measured with.
+    struct FixedCounter(usize);
+
+    impl Counter for FixedCounter {
+        fn count(&self, _: &str) -> usize {
+            self.0
+        }
+    }
+
+    #[test]
+    fn with_counter_substitutes_the_token_counter() {
+        // tokens.rs documents the Counter trait as the seam where a real BPE
+        // tokenizer could replace the heuristic without touching the rules.
+        // Nothing exercised that seam until now.
+        let (_base, target) = write_skill("counted", VALID_SKILL);
+
+        let mut cfg = generous_config();
+        cfg.max_skill_tokens = 10;
+        let res = Linter::new(cfg.clone())
+            .with_counter(Box::new(FixedCounter(11)))
+            .file(&target)
+            .unwrap();
+        assert_eq!(res.tokens.content, 11);
+        assert!(res.findings.iter().any(|f| f.rule == RULE_TOKENS_CONTENT));
+
+        // Same budget, a counter that reports under it: no finding.
+        let res = Linter::new(cfg)
+            .with_counter(Box::new(FixedCounter(9)))
+            .file(&target)
+            .unwrap();
+        assert_eq!(res.tokens.content, 9);
+        assert!(!res.findings.iter().any(|f| f.rule == RULE_TOKENS_CONTENT));
     }
 
     #[test]
@@ -952,12 +995,14 @@ mod tests {
         );
         let holding_dir = Path::new(&target.path).parent().unwrap().to_path_buf();
 
-        let res = Linter::with_cwd(generous_config(), None, holding_dir)
+        let res = Linter::new(generous_config())
+            .with_cwd(holding_dir)
             .file(&target)
             .unwrap();
         assert!(res.findings.is_empty(), "{:?}", rule_ids(&res.findings));
 
-        let res = Linter::with_cwd(generous_config(), None, base.path().to_path_buf())
+        let res = Linter::new(generous_config())
+            .with_cwd(base.path().to_path_buf())
             .file(&target)
             .unwrap();
         assert_eq!(rule_ids(&res.findings), vec![RULE_NAME_DIR_MISMATCH]);
@@ -979,7 +1024,7 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let body = "some filler prose to spend tokens on. ".repeat(500);
         let target = agents_target(base.path(), &body);
-        let res = Linter::new(Config::default(), None).file(&target).unwrap();
+        let res = Linter::new(Config::default()).file(&target).unwrap();
         assert_eq!(rule_ids(&res.findings), vec![RULE_TOKENS_CONTENT]);
     }
 
@@ -991,13 +1036,13 @@ mod tests {
         );
 
         let cfg = generous_config();
-        let res = Linter::new(cfg.clone(), None).file(&target).unwrap();
+        let res = Linter::new(cfg.clone()).file(&target).unwrap();
         assert_eq!(res.errors(), 0);
         assert_eq!(res.warnings(), 1);
 
         let mut cfg = cfg;
         cfg.strict = true;
-        let res = Linter::new(cfg, None).file(&target).unwrap();
+        let res = Linter::new(cfg).file(&target).unwrap();
         assert_eq!(res.errors(), 1);
         assert_eq!(res.warnings(), 0);
     }
@@ -1014,7 +1059,7 @@ mod tests {
             RULE_NAME_FORMAT.to_string(),
             RULE_NAME_DIR_MISMATCH.to_string(),
         ];
-        let res = Linter::new(cfg, None).file(&target).unwrap();
+        let res = Linter::new(cfg).file(&target).unwrap();
         assert!(res.findings.is_empty());
     }
 
@@ -1025,7 +1070,7 @@ mod tests {
             "---\nname: Bad_Name\ndescription: A skill with an invalid name.\n---\nBody.\n",
         );
 
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         // The file is carried once, by the result; findings anchor the line.
         // That the JSON still repeats `file` on each finding is asserted by
         // the CLI's json_output test.
@@ -1045,7 +1090,7 @@ mod tests {
             kind: Kind::Skill,
             root: base.path().to_path_buf(),
         };
-        assert!(Linter::new(generous_config(), None).file(&target).is_err());
+        assert!(Linter::new(generous_config()).file(&target).is_err());
     }
 
     #[test]
@@ -1055,28 +1100,28 @@ mod tests {
             write_file(dir.path(), "notes.md", "notes");
             let src = "# Instructions\n\nSee [notes](./notes.md) for details.\n";
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert!(res.findings.is_empty());
         }
         {
             let dir = tempfile::tempdir().unwrap();
             let src = "# Instructions\n\nSee [notes](./notes.md) for details.\n";
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
         }
         {
             let dir = tempfile::tempdir().unwrap();
             let src = "See [docs](https://example.com/x), [mail](mailto:a@example.com) and [section](#heading).\n";
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert!(res.findings.is_empty());
         }
         {
             let dir = tempfile::tempdir().unwrap();
             let src = "Example syntax:\n\n```md\n[example](./missing.md)\n```\n";
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert!(res.findings.is_empty());
         }
         {
@@ -1084,14 +1129,14 @@ mod tests {
                 "with-link",
                 "---\nname: with-link\ndescription: A skill that references a missing helper script.\n---\nSee [helper](./helper.sh).\n",
             );
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
         }
         {
             let dir = tempfile::tempdir().unwrap();
             let src = "# Instructions\n\nIntro line.\n\nSee [notes](./notes.md).\n";
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(res.findings.len(), 1);
             assert_eq!(res.findings[0].line, 5);
         }
@@ -1122,7 +1167,7 @@ mod tests {
         ];
         for (name, src) in escaping {
             let target = agents_target_under(&root, &sub, src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert!(
                 res.findings.is_empty(),
                 "{name}: {:?}",
@@ -1133,7 +1178,7 @@ mod tests {
         // Control: a missing reference that stays inside the tree is still
         // reported, so the cases above are not passing vacuously.
         let target = agents_target_under(&root, &sub, "See [x](./nowhere.md).\n");
-        let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        let res = Linter::new(generous_config()).file(&target).unwrap();
         assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
     }
 
@@ -1180,7 +1225,7 @@ mod tests {
         for (name, src, want) in cases {
             let dir = tempfile::tempdir().unwrap();
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(rule_ids(&res.findings), *want, "{name}");
         }
     }
@@ -1195,7 +1240,7 @@ mod tests {
             fs::create_dir_all(&sub).unwrap();
             let src = "Read instructions from `../planner_instructions.md`.\n";
             let target = agents_target_under(dir.path(), &sub, src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
         }
         {
@@ -1208,7 +1253,7 @@ mod tests {
             write_file(dir.path(), "planner_instructions.md", "notes");
             let src = "Read instructions from `../planner_instructions.md`.\n";
             let target = agents_target_under(dir.path(), &sub, src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert!(res.findings.is_empty());
         }
         {
@@ -1216,7 +1261,7 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let src = "Run `cargo test`, check `--strict`, or see `notes` and `./bin/lint`.\n";
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert!(res.findings.is_empty());
         }
         {
@@ -1225,7 +1270,7 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let src = "See [it](./missing.md) or `./missing.md`.\n";
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
         }
         {
@@ -1233,7 +1278,7 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let src = "Example:\n\n```md\nSee `../missing.md`.\n```\n";
             let target = agents_target(dir.path(), src);
-            let res = Linter::new(generous_config(), None).file(&target).unwrap();
+            let res = Linter::new(generous_config()).file(&target).unwrap();
             assert!(res.findings.is_empty());
         }
     }
