@@ -297,6 +297,114 @@ fn parse_bool_inline(inline: Option<&str>) -> bool {
     }
 }
 
+/// A validated run: command line and config file merged, values checked.
+///
+/// Construction decides *what* to do and rejects bad input; `execute` does it.
+/// Keeping those apart is what stops `run` from being one procedure that mixes
+/// parsing, validation, discovery, linting, reporting and exit codes.
+struct Cli {
+    settings: Resolved,
+}
+
+impl Cli {
+    /// Merges the config file under the flags and validates the result.
+    ///
+    /// Errors are phrased without naming a flag, since a bad value may have
+    /// come from either source.
+    fn new(f: Flags, cwd: &Path) -> Result<Self, String> {
+        // Typos in --disable are caught before the config file is read so the
+        // error names the flag the user just typed.
+        check_rule_names(&f.disabled)?;
+        let file_cfg = load_config(&f, cwd)?;
+        let settings = resolve(f, file_cfg);
+
+        if settings.format != "text" && settings.format != "json" {
+            return Err(format!(
+                "unknown format {:?}: want text or json",
+                settings.format
+            ));
+        }
+        if !matches!(settings.color.as_str(), "auto" | "always" | "never") {
+            return Err(format!(
+                "unknown color {:?}: want auto, always, or never",
+                settings.color
+            ));
+        }
+        Ok(Cli { settings })
+    }
+
+    /// The linter configuration this run implies.
+    fn lint_config(&self) -> Config {
+        let s = &self.settings;
+        Config {
+            max_agents_tokens: s.max_agents_tokens,
+            max_skill_tokens: s.max_skill_tokens,
+            max_skill_name_tokens: s.max_skill_name_tokens,
+            max_skill_description_tokens: s.max_skill_description_tokens,
+            disabled: s.disabled.clone(),
+            strict: s.strict,
+        }
+    }
+
+    fn reporter(&self, is_terminal: bool) -> Box<dyn report::Report> {
+        if self.settings.format == "json" {
+            Box::new(report::JsonReporter {
+                quiet: self.settings.quiet,
+            })
+        } else {
+            Box::new(report::TextReporter {
+                quiet: self.settings.quiet,
+                color: resolve_color(&self.settings.color, is_terminal),
+            })
+        }
+    }
+
+    /// Discovers, lints and reports. Returns the process exit code.
+    fn execute(&self, stdout: &mut impl Write, stderr: &mut impl Write, is_terminal: bool) -> i32 {
+        let targets = match discover::find(&self.settings.paths, &self.settings.excludes) {
+            Ok(t) => t,
+            Err(msg) => {
+                let _ = writeln!(stderr, "lintmatter: {msg}");
+                return EXIT_USAGE;
+            }
+        };
+
+        let linter = lint::Linter::new(self.lint_config(), None);
+        let mut results = Vec::with_capacity(targets.len());
+        for t in &targets {
+            match linter.file(t) {
+                Ok(res) => results.push(res),
+                Err(msg) => {
+                    let _ = writeln!(stderr, "lintmatter: {msg}");
+                    return EXIT_USAGE;
+                }
+            }
+        }
+
+        // Summarized once and handed to the reporter, rather than each reporter
+        // recomputing it and the exit code recomputing it again.
+        let summary = report::summarize(&results);
+        let write_result = self
+            .reporter(is_terminal)
+            .render(stdout, &results, &summary);
+        // A closed pipe is how `lintmatter . | head` ends, not a failure: report
+        // whatever the findings warrant and stay quiet, rather than exiting
+        // like a bad flag. Every other write failure is still worth reporting.
+        if let Err(e) = write_result
+            && e.kind() != std::io::ErrorKind::BrokenPipe
+        {
+            let _ = writeln!(stderr, "lintmatter: {e}");
+            return EXIT_USAGE;
+        }
+
+        if summary.files_with_errors > 0 {
+            EXIT_FINDINGS
+        } else {
+            EXIT_OK
+        }
+    }
+}
+
 /// Executes lintmatter and returns the process exit code. Findings go to stdout;
 /// usage and I/O problems go to stderr. `is_terminal` decides whether
 /// `--color auto` colorizes output; callers pass whether their real stdout
@@ -322,6 +430,7 @@ pub fn run(
         }
     };
 
+    // Answered without reading a config file or touching the filesystem.
     if f.show_version {
         let _ = writeln!(stdout, "lintmatter {VERSION}");
         return EXIT_OK;
@@ -333,98 +442,13 @@ pub fn run(
         return EXIT_OK;
     }
 
-    // Typos in --disable are caught before the config file is read so the
-    // error names the flag the user just typed.
-    if let Err(msg) = check_rule_names(&f.disabled) {
-        let _ = writeln!(stderr, "lintmatter: {msg}");
-        return EXIT_USAGE;
-    }
-
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let file_cfg = match load_config(&f, &cwd) {
-        Ok(cfg) => cfg,
+    match Cli::new(f, &cwd) {
+        Ok(cli) => cli.execute(stdout, stderr, is_terminal),
         Err(msg) => {
             let _ = writeln!(stderr, "lintmatter: {msg}");
-            return EXIT_USAGE;
+            EXIT_USAGE
         }
-    };
-
-    let f = resolve(f, file_cfg);
-
-    if f.format != "text" && f.format != "json" {
-        let _ = writeln!(
-            stderr,
-            "lintmatter: unknown format {:?}: want text or json",
-            f.format
-        );
-        return EXIT_USAGE;
-    }
-    if f.color != "auto" && f.color != "always" && f.color != "never" {
-        let _ = writeln!(
-            stderr,
-            "lintmatter: unknown color {:?}: want auto, always, or never",
-            f.color
-        );
-        return EXIT_USAGE;
-    }
-
-    let targets = match discover::find(&f.paths, &f.excludes) {
-        Ok(t) => t,
-        Err(msg) => {
-            let _ = writeln!(stderr, "lintmatter: {msg}");
-            return EXIT_USAGE;
-        }
-    };
-
-    let linter = lint::Linter::new(
-        Config {
-            max_agents_tokens: f.max_agents_tokens,
-            max_skill_tokens: f.max_skill_tokens,
-            max_skill_name_tokens: f.max_skill_name_tokens,
-            max_skill_description_tokens: f.max_skill_description_tokens,
-            disabled: f.disabled,
-            strict: f.strict,
-        },
-        None,
-    );
-
-    let mut results = Vec::with_capacity(targets.len());
-    for t in &targets {
-        match linter.file(t) {
-            Ok(res) => results.push(res),
-            Err(msg) => {
-                let _ = writeln!(stderr, "lintmatter: {msg}");
-                return EXIT_USAGE;
-            }
-        }
-    }
-
-    // Summarized once and handed to the reporter, rather than each reporter
-    // recomputing it and the exit code recomputing it again.
-    let summary = report::summarize(&results);
-    let reporter: Box<dyn report::Report> = if f.format == "json" {
-        Box::new(report::JsonReporter { quiet: f.quiet })
-    } else {
-        Box::new(report::TextReporter {
-            quiet: f.quiet,
-            color: resolve_color(&f.color, is_terminal),
-        })
-    };
-    let write_result = reporter.render(stdout, &results, &summary);
-    // A closed pipe is how `lintmatter . | head` ends, not a failure: report
-    // whatever the findings warrant and stay quiet, rather than exiting like a
-    // bad flag. Every other write failure is still worth reporting.
-    if let Err(e) = write_result
-        && e.kind() != std::io::ErrorKind::BrokenPipe
-    {
-        let _ = writeln!(stderr, "lintmatter: {e}");
-        return EXIT_USAGE;
-    }
-
-    if summary.files_with_errors > 0 {
-        EXIT_FINDINGS
-    } else {
-        EXIT_OK
     }
 }
 
