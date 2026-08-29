@@ -219,12 +219,17 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
         .find(|(_, line)| CLOSE_FENCE_RE.is_match(fence_line(line)))
         .map(|(i, _)| i);
     let Some(close_idx) = close_idx else {
+        // With no closing fence there is no block to remove, so the body is
+        // everything after the opening fence. Dropping that one line is what
+        // keeps the unterminated case consistent with every other path, where
+        // the fence never counts toward the content budget.
+        let body = lines[open + 1..].join("\n");
         return (
             Frontmatter {
                 present: true,
                 ..Default::default()
             },
-            text.clone(),
+            body,
             Some(Error {
                 kind: ErrKind::Unterminated,
                 line: open + 1,
@@ -540,6 +545,24 @@ mod tests {
             );
             assert!(!d.frontmatter.present, "{name}");
         }
+    }
+
+    #[test]
+    fn unterminated_frontmatter_excludes_the_opening_fence() {
+        // Every other path keeps the fence out of the body; with no closing
+        // fence there is no block to remove, so the body is everything after
+        // the opening line. Small in tokens, but it makes the rule uniform.
+        let d = Document::parse(b"---\nname: open-ended\nbody without a closing fence\n");
+        assert_eq!(d.error.map(|e| e.kind), Some(ErrKind::Unterminated));
+        assert!(!d.body.starts_with("---"), "body = {:?}", d.body);
+        assert!(
+            d.body.starts_with("name: open-ended"),
+            "body = {:?}",
+            d.body
+        );
+
+        // The body is otherwise intact, so budgets still see the real content.
+        assert!(d.body.contains("body without a closing fence"));
     }
 
     #[test]
