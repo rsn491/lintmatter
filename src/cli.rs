@@ -419,8 +419,11 @@ pub fn run(
 ) -> i32 {
     let f = match parse_args(args) {
         ParseOutcome::Flags(f) => f,
+        // Usage the user asked for goes to stdout, so `lintmatter --help | less`
+        // works. Usage printed alongside a flag error stays on stderr, with
+        // the error.
         ParseOutcome::Help => {
-            print_usage(stderr);
+            print_usage(stdout);
             return EXIT_OK;
         }
         ParseOutcome::Err(msg) => {
