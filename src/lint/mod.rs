@@ -96,12 +96,17 @@ impl std::fmt::Display for Severity {
 }
 
 /// A single rule violation.
+///
+/// The file is not stored here: it is always the enclosing [`FileResult`]'s
+/// path, so keeping a copy per finding meant an allocation each. The JSON
+/// report still carries `file` on every finding -- the reporter fills it in
+/// from the result it is already walking.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Finding {
-    pub file: String,
     #[serde(skip_serializing_if = "is_zero")]
     pub line: usize,
-    pub rule: String,
+    /// Always one of the registry's ids, so it borrows rather than allocates.
+    pub rule: &'static str,
     pub severity: Severity,
     pub message: String,
 }
@@ -172,7 +177,6 @@ pub struct FindingSink<'a> {
     findings: &'a mut Vec<Finding>,
     tally: &'a mut Tally,
     strict: bool,
-    path: &'a str,
     rule: &'static str,
 }
 
@@ -206,9 +210,8 @@ impl FindingSink<'_> {
             sev = Severity::Error;
         }
         self.findings.push(Finding {
-            file: self.path.to_string(),
             line,
-            rule: self.rule.to_string(),
+            rule: self.rule,
             severity: sev,
             message: msg,
         });
@@ -358,7 +361,6 @@ impl Linter {
                 findings: &mut findings,
                 tally: &mut tally,
                 strict: self.cfg.strict,
-                path: &t.path,
                 rule: "",
             };
             for rule in rules::all() {
@@ -494,7 +496,7 @@ mod tests {
     }
 
     fn rule_ids(findings: &[Finding]) -> Vec<&str> {
-        findings.iter().map(|f| f.rule.as_str()).collect()
+        findings.iter().map(|f| f.rule).collect()
     }
 
     /// Every budget off, so rule tests see only the rule under test. Spelled
@@ -1024,8 +1026,11 @@ mod tests {
         );
 
         let res = Linter::new(generous_config(), None).file(&target).unwrap();
+        // The file is carried once, by the result; findings anchor the line.
+        // That the JSON still repeats `file` on each finding is asserted by
+        // the CLI's json_output test.
+        assert_eq!(res.path, target.path);
         for f in &res.findings {
-            assert_eq!(f.file, target.path);
             if f.rule == RULE_NAME_FORMAT {
                 assert_eq!(f.line, 2);
             }
