@@ -369,7 +369,7 @@ impl Cli {
             }
         };
 
-        let linter = lint::Linter::new(self.lint_config(), None);
+        let linter = lint::Linter::new(self.lint_config());
         let mut results = Vec::with_capacity(targets.len());
         for t in &targets {
             match linter.file(t) {
