@@ -523,7 +523,8 @@ automatically. Flags win over the file.
   rules:
     name.dir-mismatch: false
 
-Exit codes: 0 clean (warnings still exit 0), 1 errors found, 2 bad usage.
+Exit codes: 0 clean (warnings still exit 0), 1 errors found or a file could
+not be read, 2 bad usage.
 
 Flags:
   --max-agents-tokens int              token budget for AGENTS.md content, 0 disables (default {DEFAULT_MAX_AGENTS_TOKENS})
