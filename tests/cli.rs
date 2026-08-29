@@ -543,11 +543,25 @@ fn version_and_list_rules() {
 }
 
 #[test]
-fn help_exits_zero() {
-    let (code, _, stderr) = run_args(&["-h"]);
-    assert_eq!(code, EXIT_OK);
+fn help_goes_to_stdout_and_exits_zero() {
+    for flag in ["-h", "--help"] {
+        let (code, stdout, stderr) = run_args(&[flag]);
+        assert_eq!(code, EXIT_OK, "{flag}");
+        assert!(
+            stdout.contains("lintmatter lints agent instruction files"),
+            "{flag}: {stdout}"
+        );
+        assert!(stderr.is_empty(), "{flag}: {stderr}");
+    }
+
+    // Usage printed because a flag was wrong is diagnostic output, so it
+    // stays on stderr alongside the error and leaves stdout clean.
+    let (code, stdout, stderr) = run_args(&["--nope"]);
+    assert_eq!(code, EXIT_USAGE);
+    assert!(stdout.is_empty(), "{stdout}");
     assert!(
-        stderr.contains("lintmatter lints agent instruction files"),
+        stderr.contains("flag provided but not defined")
+            && stderr.contains("lintmatter lints agent instruction files"),
         "{stderr}"
     );
 }
