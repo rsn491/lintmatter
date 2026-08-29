@@ -527,6 +527,27 @@ fn config_usage_errors() {
     }
 }
 
+/// A file can be discovered and then fail to open: it vanished in between, or
+/// it is a dangling symlink, which the walk adds without following.
+#[cfg(unix)]
+#[test]
+fn an_unreadable_file_is_reported_but_does_not_abort_the_run() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("AGENTS.md"), "readable instructions\n").unwrap();
+    let sub = dir.path().join("sub");
+    std::fs::create_dir(&sub).unwrap();
+    std::os::unix::fs::symlink("/nonexistent-target", sub.join("AGENTS.md")).unwrap();
+
+    let (code, stdout, stderr) = run_args(&[&dir.path().to_string_lossy()]);
+
+    // The bad file is named on stderr...
+    assert!(stderr.contains("cannot read"), "{stderr}");
+    // ...the good one is still checked, rather than discarded with the run...
+    assert!(stdout.contains("1 file checked"), "{stdout}");
+    // ...and the run fails, but as findings rather than as bad usage.
+    assert_eq!(code, EXIT_FINDINGS, "stdout={stdout} stderr={stderr}");
+}
+
 #[test]
 fn version_and_list_rules() {
     let (code, stdout, _) = run_args(&["--version"]);

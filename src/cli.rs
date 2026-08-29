@@ -371,12 +371,18 @@ impl Cli {
 
         let linter = lint::Linter::new(self.lint_config());
         let mut results = Vec::with_capacity(targets.len());
+        // A file that cannot be read is reported and skipped rather than
+        // ending the run: discovery and linting are separate passes, so a file
+        // can vanish or turn out to be a dangling symlink in between, and
+        // throwing away every result already computed helps nobody. It is
+        // still a failure, so the run cannot exit 0.
+        let mut unreadable = 0usize;
         for t in &targets {
             match linter.file(t) {
                 Ok(res) => results.push(res),
                 Err(msg) => {
                     let _ = writeln!(stderr, "lintmatter: {msg}");
-                    return EXIT_USAGE;
+                    unreadable += 1;
                 }
             }
         }
@@ -397,7 +403,7 @@ impl Cli {
             return EXIT_USAGE;
         }
 
-        if summary.files_with_errors > 0 {
+        if summary.files_with_errors > 0 || unreadable > 0 {
             EXIT_FINDINGS
         } else {
             EXIT_OK
