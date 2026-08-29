@@ -163,54 +163,81 @@ fn split_flag(token: &str) -> (&str, Option<&str>) {
     }
 }
 
+/// Walks the argument list, holding the cursor so a flag needing a value can
+/// consume the next argument.
+///
+/// This used to be two `macro_rules!` blocks inside `parse_args`: one mutated
+/// the caller's loop index, the other early-returned from the enclosing
+/// function. Both were invisible at the call site. As methods returning
+/// `Result`, the control flow is written where it happens.
+struct ArgParser<'a> {
+    args: &'a [String],
+    i: usize,
+    /// Budgets given a negative value, collected so every offender is named at
+    /// once rather than only the first.
+    negative: Vec<String>,
+}
+
+impl<'a> ArgParser<'a> {
+    fn new(args: &'a [String]) -> Self {
+        ArgParser {
+            args,
+            i: 0,
+            negative: Vec::new(),
+        }
+    }
+
+    /// The value for `--name`: the inline `=value` if given, otherwise the
+    /// next argument, which this consumes.
+    fn next_value(&mut self, name: &str, inline: Option<&str>) -> Result<String, String> {
+        if let Some(v) = inline {
+            return Ok(v.to_string());
+        }
+        self.i += 1;
+        self.args
+            .get(self.i)
+            .cloned()
+            .ok_or_else(|| format!("flag needs an argument: --{name}"))
+    }
+
+    /// Like [`Self::next_value`], but rejects an empty value.
+    fn next_nonempty(&mut self, name: &str, inline: Option<&str>) -> Result<String, String> {
+        let v = self.next_value(name, inline)?;
+        if v.is_empty() {
+            return Err(format!("--{name} value must not be empty"));
+        }
+        Ok(v)
+    }
+
+    /// A token budget. Negatives are recorded rather than rejected here, so
+    /// the error can list all of them together once parsing finishes.
+    fn budget(&mut self, name: &str, inline: Option<&str>) -> Result<i64, String> {
+        let raw = self.next_value(name, inline)?;
+        let n: i64 = raw
+            .parse()
+            .map_err(|_| format!("invalid value {raw:?} for flag --{name}: not an integer"))?;
+        if n < 0 {
+            self.negative.push(format!("--{name}"));
+        }
+        Ok(n)
+    }
+}
+
 fn parse_args(args: &[String]) -> ParseOutcome {
+    match parse_flags(args) {
+        Ok(outcome) => outcome,
+        Err(msg) => ParseOutcome::Err(msg),
+    }
+}
+
+fn parse_flags(args: &[String]) -> Result<ParseOutcome, String> {
     let mut f = Flags::default();
-    let mut negative: Vec<String> = Vec::new();
-    let mut i = 0;
+    let mut p = ArgParser::new(args);
 
-    macro_rules! next_value {
-        ($name:expr, $inline:expr) => {
-            match $inline {
-                Some(v) => v.to_string(),
-                None => {
-                    i += 1;
-                    match args.get(i) {
-                        Some(v) => v.clone(),
-                        None => {
-                            return ParseOutcome::Err(format!(
-                                "flag needs an argument: --{}",
-                                $name
-                            ));
-                        }
-                    }
-                }
-            }
-        };
-    }
-
-    macro_rules! parse_int {
-        ($name:expr, $raw:expr) => {
-            match $raw.parse::<i64>() {
-                Ok(n) => {
-                    if n < 0 {
-                        negative.push(format!("--{}", $name));
-                    }
-                    n
-                }
-                Err(_) => {
-                    return ParseOutcome::Err(format!(
-                        "invalid value {:?} for flag --{}: not an integer",
-                        $raw, $name
-                    ))
-                }
-            }
-        };
-    }
-
-    while i < args.len() {
-        let arg = &args[i];
+    while p.i < args.len() {
+        let arg = &args[p.i];
         if arg == "--" {
-            i += 1;
+            p.i += 1;
             break;
         }
         if !arg.starts_with('-') || arg == "-" {
@@ -218,69 +245,49 @@ fn parse_args(args: &[String]) -> ParseOutcome {
         }
 
         let (name, inline) = split_flag(arg);
+        // Budgets share a shape, so they are dispatched by table rather than
+        // by four near-identical arms.
+        let budget = match name {
+            "max-agents-tokens" => Some(&mut f.max_agents_tokens),
+            "max-skill-tokens" => Some(&mut f.max_skill_tokens),
+            "max-skill-name-tokens" => Some(&mut f.max_skill_name_tokens),
+            "max-skill-description-tokens" => Some(&mut f.max_skill_description_tokens),
+            _ => None,
+        };
+        if let Some(slot) = budget {
+            *slot = Some(p.budget(name, inline)?);
+            p.i += 1;
+            continue;
+        }
+
         match name {
-            "h" | "help" => return ParseOutcome::Help,
+            "h" | "help" => return Ok(ParseOutcome::Help),
             "version" => f.show_version = true,
             "list-rules" => f.list_rules = true,
             "strict" => f.strict = parse_bool_inline(inline),
             "quiet" => f.quiet = parse_bool_inline(inline),
             "no-config" => f.no_config = parse_bool_inline(inline),
-            "max-agents-tokens" => {
-                let raw = next_value!("max-agents-tokens", inline);
-                f.max_agents_tokens = Some(parse_int!("max-agents-tokens", raw));
-            }
-            "max-skill-tokens" => {
-                let raw = next_value!("max-skill-tokens", inline);
-                f.max_skill_tokens = Some(parse_int!("max-skill-tokens", raw));
-            }
-            "max-skill-name-tokens" => {
-                let raw = next_value!("max-skill-name-tokens", inline);
-                f.max_skill_name_tokens = Some(parse_int!("max-skill-name-tokens", raw));
-            }
-            "max-skill-description-tokens" => {
-                let raw = next_value!("max-skill-description-tokens", inline);
-                f.max_skill_description_tokens =
-                    Some(parse_int!("max-skill-description-tokens", raw));
-            }
-            "format" => f.format = next_value!("format", inline),
-            "color" => f.color = next_value!("color", inline),
-            "config" => {
-                let v = next_value!("config", inline);
-                if v.is_empty() {
-                    return ParseOutcome::Err("--config value must not be empty".to_string());
-                }
-                f.config = Some(v);
-            }
-            "exclude" => {
-                let v = next_value!("exclude", inline);
-                if v.is_empty() {
-                    return ParseOutcome::Err("--exclude value must not be empty".to_string());
-                }
-                f.excludes.push(v);
-            }
-            "disable" => {
-                let v = next_value!("disable", inline);
-                if v.is_empty() {
-                    return ParseOutcome::Err("--disable value must not be empty".to_string());
-                }
-                f.disabled.push(v);
-            }
-            other => return ParseOutcome::Err(format!("flag provided but not defined: -{other}")),
+            "format" => f.format = p.next_value(name, inline)?,
+            "color" => f.color = p.next_value(name, inline)?,
+            "config" => f.config = Some(p.next_nonempty(name, inline)?),
+            "exclude" => f.excludes.push(p.next_nonempty(name, inline)?),
+            "disable" => f.disabled.push(p.next_nonempty(name, inline)?),
+            other => return Err(format!("flag provided but not defined: -{other}")),
         }
-        i += 1;
+        p.i += 1;
     }
 
-    f.paths = args[i..].to_vec();
+    f.paths = args[p.i..].to_vec();
 
-    if !negative.is_empty() {
-        negative.sort();
-        return ParseOutcome::Err(format!(
+    if !p.negative.is_empty() {
+        p.negative.sort();
+        return Err(format!(
             "{} must be zero or more (0 disables the check)",
-            negative.join(", ")
+            p.negative.join(", ")
         ));
     }
 
-    ParseOutcome::Flags(f)
+    Ok(ParseOutcome::Flags(f))
 }
 
 fn parse_bool_inline(inline: Option<&str>) -> bool {
