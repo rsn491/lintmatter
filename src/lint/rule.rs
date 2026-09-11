@@ -4,7 +4,7 @@ use crate::discover::Kind;
 
 use super::{FileContext, FindingSink};
 
-/// One check ctxlint can perform.
+/// One check lintmatter can perform.
 ///
 /// There is one implementor per rule id, not per family, so the registry's
 /// order is the only place report order is written down: it drives

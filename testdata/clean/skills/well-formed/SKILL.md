@@ -1,6 +1,6 @@
 ---
 name: well-formed
-description: Use this skill when you need an example of front matter that satisfies every ctxlint rule, including a name that matches its directory and a description that says when to reach for the skill.
+description: Use this skill when you need an example of front matter that satisfies every lintmatter rule, including a name that matches its directory and a description that says when to reach for the skill.
 license: MIT
 allowed-tools:
   - Read

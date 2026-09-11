@@ -30,7 +30,7 @@ pub struct Error {
     pub msg: String,
 }
 
-/// An owned, simplified YAML value: enough shape information for ctxlint's
+/// An owned, simplified YAML value: enough shape information for lintmatter's
 /// rules without borrowing from the source text.
 #[derive(Debug, Clone)]
 pub enum Value {

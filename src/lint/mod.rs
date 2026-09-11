@@ -1,4 +1,4 @@
-//! Applies ctxlint's rules to agent instruction files.
+//! Applies lintmatter's rules to agent instruction files.
 
 pub mod rule;
 pub mod rules;
@@ -39,7 +39,7 @@ pub const RULE_FILE_REFERENCE_MISSING: &str = "file-reference.missing";
 pub const MAX_NAME_CHARS: usize = 64;
 pub const MAX_DESCRIPTION_CHARS: usize = 1024;
 
-/// Every rule id ctxlint can emit, in report order. Derived from the registry,
+/// Every rule id lintmatter can emit, in report order. Derived from the registry,
 /// so it cannot drift from the rules that actually run.
 pub static RULES: LazyLock<Vec<&'static str>> =
     LazyLock::new(|| rules::all().iter().map(|r| r.id()).collect());
@@ -120,7 +120,7 @@ pub struct Counts {
     pub description: usize,
 }
 
-/// Everything ctxlint learned about one file.
+/// Everything lintmatter learned about one file.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct FileResult {
     pub path: String,
@@ -391,7 +391,7 @@ fn non_empty(raw: Option<String>) -> Option<String> {
 ///
 /// A component with nothing to judge is left out of the mean rather than
 /// counted as perfect, so an inapplicable check cannot inflate a score. That
-/// covers an AGENTS.md, whose front matter ctxlint deliberately does not
+/// covers an AGENTS.md, whose front matter lintmatter deliberately does not
 /// validate; a file that names no checkable reference; and a budget switched
 /// off. A file with no applicable component at all rates 100: there was
 /// nothing to hold against it.
@@ -1094,7 +1094,7 @@ mod tests {
 
     #[test]
     fn file_references_outside_the_linted_tree_are_skipped() {
-        // Escapes are skipped whether or not the target exists. ctxlint runs
+        // Escapes are skipped whether or not the target exists. lintmatter runs
         // in CI over checkouts it does not trust, and a finding that
         // distinguished "exists" from "does not exist" above the root would
         // make any file's markdown a probe for what is on the host.

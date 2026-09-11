@@ -29,11 +29,11 @@ repos:
         types: [rust]
         pass_filenames: false
 
-      - id: ctxlint-self
-        name: ctxlint (self-lint)
-        # Excludes come from the repository's .ctxlint.yaml; --strict is a
+      - id: lintmatter-self
+        name: lintmatter (self-lint)
+        # Excludes come from the repository's .lintmatter.yaml; --strict is a
         # run-behavior flag, so it isn't configurable via that file.
-        entry: cargo run --quiet --bin ctxlint -- --strict .
+        entry: cargo run --quiet --bin lintmatter -- --strict .
         language: system
         always_run: true
         pass_filenames: false

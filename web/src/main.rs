@@ -69,7 +69,7 @@ fn render_index(template: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use ctxlint::config::{
+    use lintmatter::config::{
         DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
         DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
     };

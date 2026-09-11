@@ -13,7 +13,7 @@ use crate::lint::{
 use crate::parse::ErrKind;
 
 /// The front-matter keys the skill spec defines, plus the Claude Code
-/// extensions ctxlint additionally supports. Anything else is reported as an
+/// extensions lintmatter additionally supports. Anything else is reported as an
 /// unknown key.
 static KNOWN_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
