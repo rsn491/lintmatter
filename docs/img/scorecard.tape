@@ -1,11 +1,12 @@
 Output "/Users/ricardo/code_repos/lintmatter/docs/img/scorecard.gif"
 Set Shell "zsh"
 Set FontFamily "Menlo"
-Set FontSize 18
-Set Width 960
-Set Height 700
-Set Padding 20
+Set FontSize 27
+Set Width 1440
+Set Height 1050
+Set Padding 30
 Set WindowBar "Colorful"
+Set WindowBarSize 45
 Set TypingSpeed 45ms
 
 # Prepare the development binary and color environment without recording setup.
