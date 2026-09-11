@@ -1,10 +1,11 @@
 Output "/Users/ricardo/code_repos/lintmatter/docs/img/scorecard.gif"
 Set Shell "zsh"
 Set FontFamily "Menlo"
-Set FontSize 27
-Set Width 1440
-Set Height 1050
+Set FontSize 23
+Set Width 1600
+Set Height 760
 Set Padding 30
+Set Theme "Catppuccin Macchiato"
 Set WindowBar "Colorful"
 Set WindowBarSize 45
 Set TypingSpeed 45ms
