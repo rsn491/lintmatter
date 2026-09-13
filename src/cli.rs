@@ -126,7 +126,7 @@ fn resolve(f: Flags, cfg: config::Settings) -> Resolved {
 }
 
 /// Finds the config file for this run: the one named by `--config`, or the
-/// nearest `.ctxlint.yaml` at or above the working directory. `--no-config`
+/// nearest `.lintmatter.yaml` at or above the working directory. `--no-config`
 /// skips the search, and finding nothing is not an error.
 fn load_config(f: &Flags, cwd: &Path) -> Result<config::Settings, String> {
     if let Some(path) = &f.config {
@@ -290,7 +290,7 @@ fn parse_bool_inline(inline: Option<&str>) -> bool {
     }
 }
 
-/// Executes ctxlint and returns the process exit code. Findings go to stdout;
+/// Executes lintmatter and returns the process exit code. Findings go to stdout;
 /// usage and I/O problems go to stderr. `is_terminal` decides whether
 /// `--color auto` colorizes output; callers pass whether their real stdout
 /// is a terminal rather than this function inspecting the process's actual
@@ -309,14 +309,14 @@ pub fn run(
             return EXIT_OK;
         }
         ParseOutcome::Err(msg) => {
-            let _ = writeln!(stderr, "ctxlint: {msg}");
+            let _ = writeln!(stderr, "lintmatter: {msg}");
             print_usage(stderr);
             return EXIT_USAGE;
         }
     };
 
     if f.show_version {
-        let _ = writeln!(stdout, "ctxlint {VERSION}");
+        let _ = writeln!(stdout, "lintmatter {VERSION}");
         return EXIT_OK;
     }
     if f.list_rules {
@@ -329,7 +329,7 @@ pub fn run(
     // Typos in --disable are caught before the config file is read so the
     // error names the flag the user just typed.
     if let Err(msg) = check_rule_names(&f.disabled) {
-        let _ = writeln!(stderr, "ctxlint: {msg}");
+        let _ = writeln!(stderr, "lintmatter: {msg}");
         return EXIT_USAGE;
     }
 
@@ -337,7 +337,7 @@ pub fn run(
     let file_cfg = match load_config(&f, &cwd) {
         Ok(cfg) => cfg,
         Err(msg) => {
-            let _ = writeln!(stderr, "ctxlint: {msg}");
+            let _ = writeln!(stderr, "lintmatter: {msg}");
             return EXIT_USAGE;
         }
     };
@@ -347,7 +347,7 @@ pub fn run(
     if f.format != "text" && f.format != "json" {
         let _ = writeln!(
             stderr,
-            "ctxlint: unknown format {:?}: want text or json",
+            "lintmatter: unknown format {:?}: want text or json",
             f.format
         );
         return EXIT_USAGE;
@@ -355,7 +355,7 @@ pub fn run(
     if f.color != "auto" && f.color != "always" && f.color != "never" {
         let _ = writeln!(
             stderr,
-            "ctxlint: unknown color {:?}: want auto, always, or never",
+            "lintmatter: unknown color {:?}: want auto, always, or never",
             f.color
         );
         return EXIT_USAGE;
@@ -364,7 +364,7 @@ pub fn run(
     let targets = match discover::find(&f.paths, &f.excludes) {
         Ok(t) => t,
         Err(msg) => {
-            let _ = writeln!(stderr, "ctxlint: {msg}");
+            let _ = writeln!(stderr, "lintmatter: {msg}");
             return EXIT_USAGE;
         }
     };
@@ -386,7 +386,7 @@ pub fn run(
         match linter.file(t) {
             Ok(res) => results.push(res),
             Err(msg) => {
-                let _ = writeln!(stderr, "ctxlint: {msg}");
+                let _ = writeln!(stderr, "lintmatter: {msg}");
                 return EXIT_USAGE;
             }
         }
@@ -404,13 +404,13 @@ pub fn run(
         })
     };
     let write_result = reporter.render(stdout, &results, &summary);
-    // A closed pipe is how `ctxlint . | head` ends, not a failure: report
+    // A closed pipe is how `lintmatter . | head` ends, not a failure: report
     // whatever the findings warrant and stay quiet, rather than exiting like a
     // bad flag. Every other write failure is still worth reporting.
     if let Err(e) = write_result
         && e.kind() != std::io::ErrorKind::BrokenPipe
     {
-        let _ = writeln!(stderr, "ctxlint: {e}");
+        let _ = writeln!(stderr, "lintmatter: {e}");
         return EXIT_USAGE;
     }
 
@@ -461,10 +461,10 @@ fn check_rule_names(rules: &[String]) -> Result<(), String> {
 fn print_usage(w: &mut impl Write) {
     let _ = write!(
         w,
-        r#"ctxlint lints agent instruction files: AGENTS.md and SKILL.md.
+        r#"lintmatter lints agent instruction files: AGENTS.md and SKILL.md.
 
 Usage:
-  ctxlint [flags] [path...]
+  lintmatter [flags] [path...]
 
 Paths may be files or directories; directories are walked recursively for
 AGENTS.md and SKILL.md. With no path given, the current directory is used.
@@ -474,7 +474,7 @@ kinds, token budgets are enforced on the content, and on a skill's name and
 description.
 
 Token budgets, excludes and rules can also live in a config file: the nearest
-.ctxlint.yaml (or .ctxlint.yml) at or above the working directory is read
+.lintmatter.yaml (or .lintmatter.yml) at or above the working directory is read
 automatically. Flags win over the file.
 
   max-skill-tokens: 3000
@@ -569,13 +569,13 @@ mod tests {
         let (code, stderr) =
             run_into_failing_writer(ErrorKind::PermissionDenied, &fixture(&["broken"]));
         assert_eq!(code, EXIT_USAGE);
-        assert!(stderr.contains("ctxlint:"), "stderr={stderr}");
+        assert!(stderr.contains("lintmatter:"), "stderr={stderr}");
     }
 
     /// Runs the CLI with config discovery off, so these cases keep testing
-    /// flags and defaults no matter what .ctxlint.yaml happens to sit above
+    /// flags and defaults no matter what .lintmatter.yaml happens to sit above
     /// the directory the tests run in.
-    /// The files ctxlint reported a finding under. Every file gets a header
+    /// The files lintmatter reported a finding under. Every file gets a header
     /// line carrying its score now, so a path appearing in the output is no
     /// longer proof that a rule fired on it -- only an indented line below the
     /// header is.
@@ -601,7 +601,7 @@ mod tests {
     }
 
     fn write_config(dir: &tempfile::TempDir, body: &str) -> String {
-        let path = dir.path().join(".ctxlint.yaml");
+        let path = dir.path().join(".lintmatter.yaml");
         std::fs::write(&path, body).unwrap();
         path.to_string_lossy().to_string()
     }
@@ -1061,7 +1061,7 @@ mod tests {
     fn version_and_list_rules() {
         let (code, stdout, _) = run_args(&["--version"]);
         assert_eq!(code, EXIT_OK);
-        assert!(stdout.starts_with("ctxlint "), "{stdout}");
+        assert!(stdout.starts_with("lintmatter "), "{stdout}");
 
         let (code, stdout, _) = run_args(&["--list-rules"]);
         assert_eq!(code, EXIT_OK);
@@ -1077,7 +1077,7 @@ mod tests {
         let (code, _, stderr) = run_args(&["-h"]);
         assert_eq!(code, EXIT_OK);
         assert!(
-            stderr.contains("ctxlint lints agent instruction files"),
+            stderr.contains("lintmatter lints agent instruction files"),
             "{stderr}"
         );
     }

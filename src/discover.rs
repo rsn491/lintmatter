@@ -8,7 +8,7 @@ use glob::Pattern;
 
 use crate::utils::to_slash;
 
-/// Distinguishes the two file types ctxlint understands.
+/// Distinguishes the two file types lintmatter understands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {

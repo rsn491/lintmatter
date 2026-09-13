@@ -70,7 +70,7 @@ impl Config {
 }
 
 /// File names looked for when `--config` is not given, in priority order.
-pub const FILE_NAMES: &[&str] = &[".ctxlint.yaml", ".ctxlint.yml"];
+pub const FILE_NAMES: &[&str] = &[".lintmatter.yaml", ".lintmatter.yml"];
 
 /// Every setting a config file may carry, in the order the usage text lists
 /// them. Backs both parsing and the "unknown setting" message.
@@ -100,7 +100,7 @@ pub struct Settings {
 
 /// Returns the config file governing `start`: the first of [`FILE_NAMES`]
 /// found in `start` or any ancestor directory. Walking up means running
-/// ctxlint from a subdirectory still picks up the repository's settings.
+/// lintmatter from a subdirectory still picks up the repository's settings.
 pub fn discover(start: &Path) -> Option<PathBuf> {
     for dir in start.ancestors() {
         for name in FILE_NAMES {
@@ -176,7 +176,7 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, String> {
 }
 
 /// Reads `rules:`, a mapping of rule id to whether it runs. Only the ids
-/// switched off are returned; naming a rule that ctxlint does not have is an
+/// switched off are returned; naming a rule that lintmatter does not have is an
 /// error rather than a silent no-op, the same way `--disable` rejects typos.
 fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, String> {
     let line = node.span.start.line();
@@ -264,7 +264,7 @@ mod tests {
     use std::fs;
 
     fn parse_str(src: &str) -> Result<Settings, String> {
-        parse(src, ".ctxlint.yaml")
+        parse(src, ".lintmatter.yaml")
     }
 
     #[test]
@@ -320,52 +320,52 @@ rules:
             (
                 "unknown setting",
                 "max-skill-tokens: 10\nmax-skil-tokens: 10\n",
-                ".ctxlint.yaml:2: unknown setting \"max-skil-tokens\"",
+                ".lintmatter.yaml:2: unknown setting \"max-skil-tokens\"",
             ),
             (
                 "not an integer",
                 "max-agents-tokens: lots\n",
-                ".ctxlint.yaml:1: invalid value \"lots\" for max-agents-tokens",
+                ".lintmatter.yaml:1: invalid value \"lots\" for max-agents-tokens",
             ),
             (
                 "negative budget",
                 "\nmax-skill-tokens: -1\n",
-                ".ctxlint.yaml:2: max-skill-tokens must be zero or more",
+                ".lintmatter.yaml:2: max-skill-tokens must be zero or more",
             ),
             (
                 "budget is a list",
                 "max-skill-tokens:\n  - 10\n",
-                ".ctxlint.yaml:2: max-skill-tokens must be an integer",
+                ".lintmatter.yaml:2: max-skill-tokens must be an integer",
             ),
             (
                 "empty string",
                 "exclude: \"\"\n",
-                ".ctxlint.yaml:1: exclude must be a non-empty string",
+                ".lintmatter.yaml:1: exclude must be a non-empty string",
             ),
             (
                 "exclude entry is a mapping",
                 "exclude:\n  - drop: true\n",
-                ".ctxlint.yaml:2: exclude must be a non-empty string",
+                ".lintmatter.yaml:2: exclude must be a non-empty string",
             ),
             (
                 "rules is not a mapping",
                 "rules:\n  - name.format\n",
-                ".ctxlint.yaml:2: rules must be a mapping",
+                ".lintmatter.yaml:2: rules must be a mapping",
             ),
             (
                 "unknown rule",
                 "rules:\n  name.format: true\n  no.such.rule: false\n",
-                ".ctxlint.yaml:3: unknown rule \"no.such.rule\"",
+                ".lintmatter.yaml:3: unknown rule \"no.such.rule\"",
             ),
             (
                 "rule value is not a boolean",
                 "rules:\n  name.format: maybe\n",
-                ".ctxlint.yaml:2: invalid value \"maybe\" for rules.name.format",
+                ".lintmatter.yaml:2: invalid value \"maybe\" for rules.name.format",
             ),
             (
                 "not a mapping",
                 "- max-skill-tokens\n",
-                ".ctxlint.yaml:1: config must be a mapping",
+                ".lintmatter.yaml:1: config must be a mapping",
             ),
             (
                 "invalid yaml",
@@ -383,7 +383,7 @@ rules:
     #[test]
     fn load_reads_a_file() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join(".ctxlint.yaml");
+        let path = dir.path().join(".lintmatter.yaml");
         fs::write(&path, "max-skill-tokens: 42\n").unwrap();
 
         let got = load(&path).unwrap();
@@ -395,7 +395,7 @@ rules:
         // Errors name the file they came from.
         fs::write(&path, "max-skill-tokens: nope\n").unwrap();
         let err = load(&path).unwrap_err();
-        assert!(err.contains(".ctxlint.yaml:1:"), "{err}");
+        assert!(err.contains(".lintmatter.yaml:1:"), "{err}");
     }
 
     #[test]
@@ -405,17 +405,17 @@ rules:
         fs::create_dir_all(&nested).unwrap();
         assert!(discover(&nested).is_none());
 
-        let root_cfg = dir.path().join(".ctxlint.yml");
+        let root_cfg = dir.path().join(".lintmatter.yml");
         fs::write(&root_cfg, "max-skill-tokens: 1\n").unwrap();
         assert_eq!(discover(&nested), Some(root_cfg));
 
         // .yaml wins over .yml in the same directory, and the nearest
         // directory wins over an ancestor.
-        let preferred = dir.path().join(".ctxlint.yaml");
+        let preferred = dir.path().join(".lintmatter.yaml");
         fs::write(&preferred, "max-skill-tokens: 1\n").unwrap();
         assert_eq!(discover(dir.path()), Some(preferred));
 
-        let nested_cfg = nested.join(".ctxlint.yaml");
+        let nested_cfg = nested.join(".lintmatter.yaml");
         fs::write(&nested_cfg, "max-skill-tokens: 2\n").unwrap();
         assert_eq!(discover(&nested), Some(nested_cfg));
     }
@@ -423,7 +423,7 @@ rules:
     #[test]
     fn discover_ignores_a_directory_named_like_the_config() {
         let dir = tempfile::tempdir().unwrap();
-        fs::create_dir(dir.path().join(".ctxlint.yaml")).unwrap();
+        fs::create_dir(dir.path().join(".lintmatter.yaml")).unwrap();
         assert!(discover(dir.path()).is_none());
     }
 }

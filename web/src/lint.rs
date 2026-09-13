@@ -1,5 +1,5 @@
 //! Handles `POST /lint`: validates a GitHub URL, clones it into a temp
-//! directory, runs the `ctxlint` binary against the clone, and forwards its
+//! directory, runs the `lintmatter` binary against the clone, and forwards its
 //! JSON report to the caller.
 
 use std::path::{Path, PathBuf};
@@ -8,7 +8,7 @@ use std::time::Duration;
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use ctxlint::config::{
+use lintmatter::config::{
     DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_NAME_TOKENS,
     DEFAULT_MAX_SKILL_TOKENS,
 };
@@ -20,7 +20,7 @@ const LINT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Caps a budget well above any real file so a typo in the form cannot turn
 /// into an unbounded number on the command line. Zero stays meaningful: it is
-/// how ctxlint spells "skip this check".
+/// how lintmatter spells "skip this check".
 const MAX_BUDGET: i64 = 1_000_000;
 
 const GENERIC_ERROR: &str =
@@ -31,8 +31,8 @@ const INVALID_BUDGET_ERROR: &str =
 
 /// The token budgets a run enforces, named after the flags they become.
 ///
-/// Every field is optional, and an omitted one is not passed to `ctxlint` at
-/// all, so the clone's own `.ctxlint.yaml` still decides it. A budget that is
+/// Every field is optional, and an omitted one is not passed to `lintmatter` at
+/// all, so the clone's own `.lintmatter.yaml` still decides it. A budget that is
 /// present wins over that file, the same way the flag does on the command
 /// line -- which is what makes the form authoritative when it sends one.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
@@ -44,7 +44,7 @@ pub struct Budgets {
 }
 
 impl Budgets {
-    /// What a bare `ctxlint` run enforces. The page starts the form from
+    /// What a bare `lintmatter` run enforces. The page starts the form from
     /// these, so the numbers on screen are the linter's own rather than a
     /// second opinion that could drift from it.
     pub fn defaults() -> Self {
@@ -115,7 +115,7 @@ pub fn budget_settings_json() -> String {
 pub struct LintRequest {
     url: String,
     /// Absent for a caller that only sends a URL, which then gets whatever
-    /// the repository and ctxlint's defaults work out between them.
+    /// the repository and lintmatter's defaults work out between them.
     #[serde(default)]
     budgets: Budgets,
 }
@@ -169,7 +169,7 @@ async fn handle_lint_inner(req: LintRequest) -> Result<Json<Value>, ApiError> {
         .map_err(|e| server_error(format!("failed to create temp dir: {e}")))?;
 
     clone_repo(&clone_url, dir.path()).await?;
-    let mut report = run_ctxlint(dir.path(), &req.budgets).await?;
+    let mut report = run_lintmatter(dir.path(), &req.budgets).await?;
 
     if let Some(obj) = report.as_object_mut() {
         obj.insert("url".to_string(), Value::String(clone_url));
@@ -243,8 +243,8 @@ async fn clone_repo(url: &str, dest: &Path) -> Result<(), ApiError> {
     Ok(())
 }
 
-async fn run_ctxlint(repo_dir: &Path, budgets: &Budgets) -> Result<Value, ApiError> {
-    let mut cmd = tokio::process::Command::new(ctxlint_binary_path());
+async fn run_lintmatter(repo_dir: &Path, budgets: &Budgets) -> Result<Value, ApiError> {
+    let mut cmd = tokio::process::Command::new(lintmatter_binary_path());
     cmd.args(["--format", "json"])
         .args(budgets.flags())
         .current_dir(repo_dir)
@@ -253,28 +253,31 @@ async fn run_ctxlint(repo_dir: &Path, budgets: &Budgets) -> Result<Value, ApiErr
     let output = tokio::time::timeout(LINT_TIMEOUT, cmd.output())
         .await
         .map_err(|_| server_error("linting the repository timed out".to_string()))?
-        .map_err(|e| server_error(format!("failed to run ctxlint: {e}")))?;
+        .map_err(|e| server_error(format!("failed to run lintmatter: {e}")))?;
 
-    // ctxlint exits 0 (clean) or 1 (findings reported) on a successful run;
+    // lintmatter exits 0 (clean) or 1 (findings reported) on a successful run;
     // anything else (2 = usage error, or killed by signal) means the run
     // itself failed and stdout won't be valid JSON.
     match output.status.code() {
         Some(0) | Some(1) => serde_json::from_slice(&output.stdout)
-            .map_err(|e| server_error(format!("failed to parse ctxlint output: {e}"))),
+            .map_err(|e| server_error(format!("failed to parse lintmatter output: {e}"))),
         _ => {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(server_error(format!("ctxlint failed: {}", stderr.trim())))
+            Err(server_error(format!(
+                "lintmatter failed: {}",
+                stderr.trim()
+            )))
         }
     }
 }
 
-/// Locates the `ctxlint` binary as a sibling of this binary, since both are
+/// Locates the `lintmatter` binary as a sibling of this binary, since both are
 /// built into the same workspace `target/` directory; falls back to `PATH`.
-fn ctxlint_binary_path() -> PathBuf {
+fn lintmatter_binary_path() -> PathBuf {
     let name = if cfg!(windows) {
-        "ctxlint.exe"
+        "lintmatter.exe"
     } else {
-        "ctxlint"
+        "lintmatter"
     };
     if let Some(dir) = std::env::current_exe()
         .ok()
@@ -337,7 +340,7 @@ mod tests {
     }
 
     /// A budget the caller left out must not reach the command line at all:
-    /// that is what leaves the clone's own `.ctxlint.yaml` in charge of it.
+    /// that is what leaves the clone's own `.lintmatter.yaml` in charge of it.
     #[test]
     fn omitted_budgets_pass_no_flags() {
         assert_eq!(

@@ -1,6 +1,6 @@
-# Working in ctxlint
+# Working in lintmatter
 
-`ctxlint` lints agent instruction files. It is a Rust CLI; the YAML front
+`lintmatter` lints agent instruction files. It is a Rust CLI; the YAML front
 matter is parsed with `saphyr`, everything else is hand-rolled.
 
 ## Checks before pushing
@@ -23,7 +23,7 @@ cargo test --workspace
   config file; `resolve` merges flags over the file over the defaults. Run
   behavior (`strict`, `quiet`, `format`, `color`) is flag-only and does not
   go through the config file.
-- `src/config.rs` — the `.ctxlint.yaml` loader and its discovery walk. Only
+- `src/config.rs` — the `.lintmatter.yaml` loader and its discovery walk. Only
   budgets, `exclude` and `rules` are configurable there; see the module doc
   comment for why run-behavior flags are excluded.
 - `src/discover.rs` — `Discoverer` turns paths into targets, pruning dependency
@@ -39,8 +39,8 @@ cargo test --workspace
 - `src/report/` — the `Report` trait with `TextReporter` and `JsonReporter`.
 - `src/utils.rs` — helpers belonging to no module: `humanize`, `plural`,
   `to_slash`, `clean_path`, `ceil_div`.
-- `web/` — the `ctxlint-web` crate: an axum server that clones a GitHub repo
-  and runs the `ctxlint` binary over it. It listens on `HOST`/`PORT`
+- `web/` — the `lintmatter-web` crate: an axum server that clones a GitHub repo
+  and runs the `lintmatter` binary over it. It listens on `HOST`/`PORT`
   (default `127.0.0.1:3000`); a container host wants `HOST=0.0.0.0`. `lint.rs`'s
   `Budgets` turns the form's token budgets into `--max-*` flags; `main.rs`
   substitutes the defaults into `index.html`'s `{{BUDGET_SETTINGS}}` at render

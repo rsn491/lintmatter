@@ -29,7 +29,7 @@ static URI_SCHEME_RE: LazyLock<Regex> =
 /// the file's contract with the runtime regardless of kind.
 ///
 /// References resolving outside the linted tree are left alone, like URLs and
-/// absolute paths: ctxlint often runs in CI over a checkout it does not trust,
+/// absolute paths: lintmatter often runs in CI over a checkout it does not trust,
 /// and stat-ing whatever path a file names would turn its markdown into a
 /// probe for what exists on the host.
 pub struct Missing;
