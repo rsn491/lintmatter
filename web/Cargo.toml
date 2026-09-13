@@ -3,6 +3,9 @@ name = "lintmatter-web"
 version = "0.1.0"
 edition = "2024"
 
+[package.metadata.dist]
+dist = false
+
 [dependencies]
 axum = "0.8.9"
 # For the default token budgets the UI starts from: they belong to the
