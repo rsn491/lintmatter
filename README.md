@@ -27,6 +27,7 @@ lintmatter .
 
 ```sh
 lintmatter [flags] [path...]
+lintmatter init [--force]
 ```
 
 Paths may be files or directories. Directories are walked recursively for
@@ -80,9 +81,25 @@ Switch any of them off by id:
 lintmatter --disable name.dir-mismatch --disable frontmatter.unknown-key .
 ```
 
-Rules (along with token budgets and excludes) can also be set in a
-`.lintmatter.yaml` config file instead of passing flags every time — see
-[`.lintmatter.yaml`](.lintmatter.yaml) for an example.
+## Configuration
+
+Rules, token budgets and excludes can be pinned in a `.lintmatter.yaml` config
+file instead of passing flags every time. `lintmatter init` writes one for you,
+asking about each setting in turn:
+
+```sh
+lintmatter init
+```
+
+Blank answers keep a setting's default, and an existing config is left alone
+unless `--force` is given. See [`.lintmatter.yaml`](.lintmatter.yaml) for what the
+result looks like.
+
+The nearest `.lintmatter.yaml` (or `.lintmatter.yml`) at or above the working
+directory is the one that applies, so running lintmatter from a subdirectory
+still picks up the repository's settings. Flags win over the file, and
+`--exclude`/`--disable` add to what the file already asked for rather than
+replacing it.
 
 ## Score
 
