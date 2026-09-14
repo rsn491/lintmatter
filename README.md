@@ -18,6 +18,11 @@ Install:
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh
 ```
 
+Or:
+```sh
+brew install rsn491/tap/lintmatter
+```
+
 Run in your repo:
 ```sh
 lintmatter .
