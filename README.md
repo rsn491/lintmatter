@@ -18,7 +18,7 @@ Install:
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh
 ```
 
-Or with Homebrew:
+Or:
 ```sh
 brew install rsn491/tap/lintmatter
 ```
