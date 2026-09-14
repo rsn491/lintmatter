@@ -3,10 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>lintmatter</title>
+<title>{{PAGE_TITLE}}</title>
 <style>
   :root {
     color-scheme: light dark;
+    --accent: #2563eb;
+    --accent-contrast: #fff;
+    --muted: #6b7280;
+    --surface: color-mix(in srgb, currentColor 4%, transparent);
+    --surface-raised: color-mix(in srgb, currentColor 2%, transparent);
+    --border: color-mix(in srgb, currentColor 14%, transparent);
+    --border-strong: color-mix(in srgb, currentColor 28%, transparent);
+    --radius: 10px;
     /* The score bands, mirroring score_color in src/report/text.rs. */
     --score-green: #15803d;
     --score-yellow: #a16207;
@@ -17,6 +25,9 @@
      legible on a dark background. */
   @media (prefers-color-scheme: dark) {
     :root {
+      --accent: #60a5fa;
+      --accent-contrast: #111827;
+      --muted: #a3a3a3;
       --score-green: #4ade80;
       --score-yellow: #facc15;
       --score-orange: #fb923c;
@@ -26,13 +37,18 @@
   *, *::before, *::after { box-sizing: border-box; }
   body {
     margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     line-height: 1.5;
+    background: Canvas;
+    color: CanvasText;
   }
 
   .site-header {
-    background: color-mix(in srgb, currentColor 4%, transparent);
-    border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
   }
   .header-inner {
     max-width: 860px;
@@ -43,9 +59,6 @@
     justify-content: space-between;
   }
   .wordmark {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 1.2rem;
     font-weight: 700;
@@ -53,62 +66,206 @@
     color: inherit;
     text-decoration: none;
   }
-  .wordmark::before {
-    content: "";
-    width: 0.65rem;
-    height: 0.65rem;
-    border-radius: 2px;
-    background: #2563eb;
-  }
   .repo-link {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    color: #767676;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    color: var(--muted);
     text-decoration: none;
-    font-size: 0.9rem;
+    border-radius: 6px;
   }
-  .repo-link:hover { color: inherit; }
+  .repo-link:hover { color: inherit; background: var(--surface); }
   .repo-link svg { width: 1.15rem; height: 1.15rem; }
+  .header-nav {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .demo-link {
+    color: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .demo-link:hover { color: var(--accent); }
 
-  main { max-width: 860px; margin: 0 auto; padding: 1.75rem 1.25rem 3rem; }
+  body.landing .demo-page,
+  body.demo .landing-page { display: none; }
 
-  p.lede { color: #767676; margin-top: 0; max-width: 56ch; }
+  main { width: 100%; max-width: 860px; flex: 1; margin: 0 auto; padding: 2.75rem 1.25rem 4rem; }
 
-  .features { margin: 1.5rem 0 2rem; }
-  .features-label, .score-label {
+  p.lede {
+    max-width: 24ch;
+    margin: 0;
+    font-size: clamp(1.7rem, 4.5vw, 2.5rem);
+    font-weight: 300;
+    line-height: 1.18;
+    letter-spacing: -0.035em;
+    color: color-mix(in srgb, currentColor 82%, transparent);
+  }
+
+  .tool-description {
+    max-width: 56ch;
+    margin: 0.75rem 0 2.5rem;
+    color: color-mix(in srgb, currentColor 72%, transparent);
+    font-size: 0.95rem;
+    font-weight: 300;
+  }
+
+  .features { margin: 2.5rem 0; }
+  .features-label, .runner-label, .score-label {
     display: block;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: #767676;
+    color: var(--muted);
     margin-bottom: 0.6rem;
   }
+  .features-label { margin: 0 0 0.75rem; }
   .features ul {
     list-style: none;
     margin: 0;
     padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
   }
   .features li {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.55rem;
-    font-size: 0.95rem;
+    --feature-color: var(--accent);
+    min-width: 0;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--feature-color) 4%, transparent);
   }
-  .features svg {
-    width: 1.1rem;
-    height: 1.1rem;
-    flex: none;
-    margin-top: 0.1rem;
-    color: #2563eb;
+  .features li:nth-child(2) { --feature-color: #4f46e5; }
+  .features li:nth-child(3) { --feature-color: #0891b2; }
+  .feature-icon {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    margin-bottom: 0.8rem;
+    border-radius: 6px;
+    color: var(--feature-color);
+    background: color-mix(in srgb, var(--feature-color) 12%, transparent);
+  }
+  .feature-icon svg { width: 1.15rem; height: 1.15rem; }
+  .features h3 {
+    margin: 0 0 0.3rem;
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
+  .features p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.84rem;
+    line-height: 1.45;
+  }
+  .feature-scope {
+    display: inline-block;
+    margin-top: 0.75rem;
+    color: var(--feature-color);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+  }
+  @media (prefers-color-scheme: dark) {
+    .features li:nth-child(2) { --feature-color: #818cf8; }
+    .features li:nth-child(3) { --feature-color: #22d3ee; }
+  }
+  @media (max-width: 680px) {
+    .features ul { grid-template-columns: 1fr; }
+    .features li {
+      display: grid;
+      grid-template-columns: 2rem 1fr;
+      column-gap: 0.8rem;
+    }
+    .feature-icon { grid-row: 1 / span 3; margin-bottom: 0; }
   }
 
-  form { display: flex; gap: 0.5rem; margin: 1.5rem 0; }
+  .install-card {
+    margin: 0 0 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .install-command {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    background: var(--surface);
+  }
+  .install-command code {
+    min-width: 0;
+    flex: 1;
+    padding: 0.85rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+  }
+  .copy-button {
+    flex: none;
+    min-width: 5.5rem;
+    padding: 0.65rem 0.85rem;
+    border: 0;
+    border-left: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8rem;
+  }
+  .copy-button:hover { background: color-mix(in srgb, currentColor 7%, transparent); }
+  .copy-button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+  .demo {
+    margin: 0 0 2rem;
+  }
+  .demo img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .landing-cta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.25rem;
+    color: inherit;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-decoration: none;
+  }
+  .landing-cta:hover {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+  }
+  .landing-cta strong { display: block; font-size: 1.05rem; }
+  .landing-cta span { color: var(--muted); font-size: 0.9rem; }
+  .landing-cta b {
+    flex: none;
+    color: var(--accent);
+    font-size: 1.35rem;
+    font-weight: 400;
+  }
+  .landing-cta:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    outline-offset: 2px;
+  }
+
+  .runner { margin-top: 2.5rem; }
+  .runner-label { margin: 0 0 0.75rem; }
+  form { display: flex; gap: 0.75rem; margin: 0 0 0.75rem; }
   .input-wrap { position: relative; flex: 1; }
   .input-wrap svg {
     position: absolute;
@@ -117,28 +274,51 @@
     transform: translateY(-50%);
     width: 1.1rem;
     height: 1.1rem;
-    color: #767676;
+    color: var(--muted);
     pointer-events: none;
   }
   input[type="url"] {
     width: 100%;
-    padding: 0.5rem 0.7rem 0.5rem 2.2rem;
+    min-height: 2.75rem;
+    padding: 0.6rem 0.8rem 0.6rem 2.35rem;
     font-size: 1rem;
-    border: 1px solid #999;
-    border-radius: 6px;
+    color: inherit;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+  }
+  input:focus-visible {
+    border-color: var(--accent);
+    outline: 3px solid color-mix(in srgb, var(--accent) 20%, transparent);
+    outline-offset: 1px;
   }
   button {
-    padding: 0.5rem 1.1rem;
+    min-height: 2.75rem;
+    padding: 0.6rem 1.2rem;
     font-size: 1rem;
     border: none;
-    border-radius: 6px;
-    background: #2563eb;
-    color: white;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: var(--accent-contrast);
     cursor: pointer;
+    font-weight: 600;
   }
-  button:disabled { background: #93b4f0; cursor: default; }
-  #status { margin: 1rem 0; }
-  #status.error { color: #b91c1c; }
+  button:hover:not(:disabled) { filter: brightness(1.08); }
+  button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 2px; }
+  button:disabled {
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+    color: color-mix(in srgb, currentColor 65%, transparent);
+    cursor: default;
+  }
+  #status:not(:empty) {
+    margin: 1rem 0;
+    padding: 0.8rem 0.9rem;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  #status.error { color: var(--score-red); }
 
   /* The run's score, first thing in the results. */
   .score-card {
@@ -149,9 +329,9 @@
     gap: 0.75rem 1.5rem;
     margin: 1.5rem 0;
     padding: 1.1rem 1.25rem;
-    background: color-mix(in srgb, currentColor 4%, transparent);
-    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
   }
   .score-label { margin-bottom: 0.35rem; }
   .score-value {
@@ -163,7 +343,7 @@
     letter-spacing: -0.03em;
     color: var(--score-band);
   }
-  .score-out-of { font-size: 1rem; font-weight: 400; color: #767676; }
+  .score-out-of { font-size: 1rem; font-weight: 400; color: var(--muted); }
   .score-band-label {
     display: block;
     margin-top: 0.35rem;
@@ -171,7 +351,7 @@
     font-weight: 600;
     color: var(--score-band);
   }
-  .score-meta { color: #767676; font-size: 0.9rem; }
+  .score-meta { color: var(--muted); font-size: 0.9rem; }
 
   .score-badge {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -193,9 +373,9 @@
      button, and the limits only matter once a repository disagrees with
      them. */
   .budgets {
-    margin: -0.75rem 0 1.5rem;
-    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-    border-radius: 6px;
+    margin: 0 0 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     font-size: 0.9rem;
   }
   .budgets summary {
@@ -207,7 +387,7 @@
     cursor: pointer;
   }
   .budgets[open] summary {
-    border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    border-bottom: 1px solid var(--border);
   }
   .budgets-body { padding: 0.9rem; }
   .budget-grid {
@@ -223,26 +403,27 @@
   }
   /* Muted on the caption only: the value has to stay at full contrast, and an
      input inheriting a dimmed label would read as disabled. */
-  .budget-field span { color: #767676; }
+  .budget-field span { color: var(--muted); }
   input[type="number"] {
     width: 100%;
     padding: 0.4rem 0.5rem;
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.95rem;
     color: inherit;
-    background: transparent;
-    border: 1px solid #999;
-    border-radius: 6px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
   }
   .budgets-actions { margin-top: 0.9rem; }
   .link-button {
+    min-height: 0;
     padding: 0;
     background: none;
-    color: #2563eb;
+    color: var(--accent);
     font-size: 0.85rem;
     text-decoration: underline;
   }
-  .link-button:disabled { background: none; color: #767676; }
+  .link-button:disabled { background: none; color: var(--muted); }
   /* Says a run will not use the defaults, so a collapsed panel cannot hide
      that the score was measured against something else. */
   .budgets-custom {
@@ -253,104 +434,189 @@
     text-transform: uppercase;
     padding: 0.15rem 0.35rem;
     border-radius: 4px;
-    color: #767676;
+    color: var(--muted);
     background: color-mix(in srgb, currentColor 10%, transparent);
   }
 
-  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-  th, td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
-  th { color: #555; font-weight: 600; }
-  tr.error td.severity { color: #b91c1c; font-weight: 600; }
-  tr.warning td.severity { color: #b45309; font-weight: 600; }
-  .file-group { margin-top: 1.5rem; }
+  table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 0.55rem 0.65rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  tr.error td.severity { color: var(--score-red); font-weight: 600; }
+  tr.warning td.severity { color: var(--score-orange); font-weight: 600; }
+  .file-group {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
   .file-group h3 {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
-    margin-bottom: 0.3rem;
+    margin: 0 0 0.5rem;
     font-size: 1rem;
     font-family: monospace;
   }
+  .site-footer {
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    font-size: 0.82rem;
+  }
+  .footer-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  .site-footer a { color: inherit; }
+  .site-footer a:hover { color: var(--accent); }
+  @media (max-width: 560px) {
+    main { padding-top: 2rem; }
+    form { flex-direction: column; }
+    #submit-btn { width: 100%; }
+    .install-command { display: block; }
+    .copy-button {
+      width: 100%;
+      border-top: 1px solid var(--border);
+      border-left: 0;
+    }
+    .footer-inner { align-items: flex-start; flex-direction: column; gap: 0.35rem; }
+  }
 </style>
 </head>
-<body>
+<body class="{{PAGE_CLASS}}">
 <header class="site-header">
   <div class="header-inner">
-    <span class="wordmark">lintmatter</span>
-    <a class="repo-link" href="https://github.com/rsn491/lintmatter" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-      </svg>
-      Source
-    </a>
+    <a class="wordmark" href="/">lintmatter</a>
+    <nav class="header-nav" aria-label="Primary navigation">
+      <a class="demo-link" href="/demo">Demo</a>
+      <a class="repo-link" href="https://github.com/rsn491/lintmatter" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+    </nav>
   </div>
 </header>
 
-<main>
-  <p class="lede">A linter for agent context files: AGENTS.md, skills, etc.; ensuring they're properly formatted and follow best practices.</p>
+<main class="landing-page">
+  <p class="lede">A linter for agentic context</p>
+  <p class="tool-description">Checks AGENTS.md and SKILL.md files for broken references, invalid skill front matter, and exceeded token budgets.</p>
 
-  <div class="features">
-    <span class="features-label">Features</span>
+  <section class="install-card" aria-label="Install lintmatter">
+    <div class="install-command">
+      <code id="install-command">curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh</code>
+      <button type="button" class="copy-button" id="copy-install" aria-label="Copy installation command" aria-live="polite">Copy</button>
+    </div>
+  </section>
+
+  <figure class="demo">
+    <img src="/scorecard.gif" alt="lintmatter linting a repo with broken skills, then reporting a scorecard">
+  </figure>
+
+  <section class="features" aria-labelledby="features-heading">
+    <h2 class="features-label" id="features-heading">What it checks</h2>
     <ul>
       <li>
-        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>
-        Detects broken references
+        <span class="feature-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1"/>
+            <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1"/>
+          </svg>
+        </span>
+        <h3>Broken references</h3>
+        <p>Find missing relative links and inline file paths before an agent follows them.</p>
+        <span class="feature-scope">AGENTS.md + SKILL.md</span>
       </li>
       <li>
-        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>
-        Validates skill frontmatter
+        <span class="feature-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M8 13h8M8 17h5"/>
+          </svg>
+        </span>
+        <h3>Skill front matter</h3>
+        <p>Validate YAML, required fields, naming, metadata, and allowed tool declarations.</p>
+        <span class="feature-scope">SKILL.md</span>
       </li>
       <li>
-        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-8 8a1 1 0 01-1.4 0l-4-4a1 1 0 111.4-1.4L8 12.6l7.3-7.3a1 1 0 011.4 0z" clip-rule="evenodd"/></svg>
-        Validates token budgets for skills and AGENTS.md
+        <span class="feature-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M16 8.5h-6a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H8M12 6.5v11"/>
+          </svg>
+        </span>
+        <h3>Token budgets</h3>
+        <p>Keep instructions, skill names, and descriptions within configurable limits.</p>
+        <span class="feature-scope">AGENTS.md + SKILL.md</span>
       </li>
     </ul>
-  </div>
+  </section>
 
-  <form id="lint-form">
-    <div class="input-wrap">
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-      </svg>
-      <input type="url" id="url" name="url" placeholder="https://github.com/owner/repo" required>
-    </div>
-    <button type="submit" id="submit-btn">Lint</button>
-  </form>
-
-  <details class="budgets" id="budgets">
-    <summary>
-      Token budgets
-      <span class="budgets-custom" id="budgets-custom" hidden>customized</span>
-    </summary>
-    <div class="budgets-body">
-      <div class="budget-grid">
-        <label class="budget-field">
-          <span>AGENTS.md content</span>
-          <input type="number" id="max_agents_tokens" form="lint-form" inputmode="numeric" step="1">
-        </label>
-        <label class="budget-field">
-          <span>SKILL.md content</span>
-          <input type="number" id="max_skill_tokens" form="lint-form" inputmode="numeric" step="1">
-        </label>
-        <label class="budget-field">
-          <span>Skill name</span>
-          <input type="number" id="max_skill_name_tokens" form="lint-form" inputmode="numeric" step="1">
-        </label>
-        <label class="budget-field">
-          <span>Skill description</span>
-          <input type="number" id="max_skill_description_tokens" form="lint-form" inputmode="numeric" step="1">
-        </label>
-      </div>
-      <div class="budgets-actions">
-        <button type="button" class="link-button" id="reset-budgets" disabled>Reset</button>
-      </div>
-    </div>
-  </details>
-
-  <div id="status"></div>
-  <div id="results"></div>
+  <a class="landing-cta" href="/demo">
+    <span><strong>Try It Out</strong>Lint a public GitHub repository.</span>
+    <b aria-hidden="true">→</b>
+  </a>
 </main>
+
+<main class="demo-page">
+  <section class="runner" aria-labelledby="runner-heading">
+    <h2 class="runner-label" id="runner-heading">Lint a repository</h2>
+    <form id="lint-form">
+      <div class="input-wrap">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        <input type="url" id="url" name="url" placeholder="https://github.com/owner/repo" aria-label="GitHub repository URL" required>
+      </div>
+      <button type="submit" id="submit-btn">Lint</button>
+    </form>
+
+    <details class="budgets" id="budgets">
+      <summary>
+        Token budgets
+        <span class="budgets-custom" id="budgets-custom" hidden>customized</span>
+      </summary>
+      <div class="budgets-body">
+        <div class="budget-grid">
+          <label class="budget-field">
+            <span>AGENTS.md content</span>
+            <input type="number" id="max_agents_tokens" form="lint-form" inputmode="numeric" step="1">
+          </label>
+          <label class="budget-field">
+            <span>SKILL.md content</span>
+            <input type="number" id="max_skill_tokens" form="lint-form" inputmode="numeric" step="1">
+          </label>
+          <label class="budget-field">
+            <span>Skill name</span>
+            <input type="number" id="max_skill_name_tokens" form="lint-form" inputmode="numeric" step="1">
+          </label>
+          <label class="budget-field">
+            <span>Skill description</span>
+            <input type="number" id="max_skill_description_tokens" form="lint-form" inputmode="numeric" step="1">
+          </label>
+        </div>
+        <div class="budgets-actions">
+          <button type="button" class="link-button" id="reset-budgets" disabled>Reset</button>
+        </div>
+      </div>
+    </details>
+
+    <div id="status" role="status" aria-live="polite"></div>
+    <div id="results"></div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <span>&copy; 2026 lintmatter</span>
+    <a href="https://github.com/rsn491/lintmatter/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a>
+  </div>
+</footer>
 
 <script>
 const form = document.getElementById('lint-form');
@@ -361,6 +627,24 @@ const resultsEl = document.getElementById('results');
 const budgetsEl = document.getElementById('budgets');
 const budgetsCustomEl = document.getElementById('budgets-custom');
 const resetBudgetsBtn = document.getElementById('reset-budgets');
+const installCommandEl = document.getElementById('install-command');
+const copyInstallBtn = document.getElementById('copy-install');
+
+let copyFeedbackTimer;
+function showCopyFeedback(message) {
+  copyInstallBtn.textContent = message;
+  clearTimeout(copyFeedbackTimer);
+  copyFeedbackTimer = setTimeout(() => { copyInstallBtn.textContent = 'Copy'; }, 2000);
+}
+
+copyInstallBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(installCommandEl.textContent);
+    showCopyFeedback('Copied');
+  } catch (_err) {
+    showCopyFeedback('Copy failed');
+  }
+});
 
 // The token budgets, substituted in by the server from lintmatter's own defaults
 // (src/config.rs) and its ceiling on a budget. The form therefore opens on
