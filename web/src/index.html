@@ -195,6 +195,16 @@
     border-radius: var(--radius);
     overflow: hidden;
   }
+  .install-header {
+    padding: 0.65rem 0.85rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
   .install-command {
     display: flex;
     align-items: stretch;
@@ -507,7 +517,8 @@
   <p class="lede">A linter for agentic context</p>
   <p class="tool-description">Checks AGENTS.md and SKILL.md files for broken references, invalid skill front matter, and exceeded token budgets.</p>
 
-  <section class="install-card" aria-label="Install lintmatter">
+  <section class="install-card" aria-labelledby="install-heading">
+    <div class="install-header" id="install-heading">Install</div>
     <div class="install-command">
       <code id="install-command">curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh</code>
       <button type="button" class="copy-button" id="copy-install" aria-label="Copy installation command" aria-live="polite">Copy</button>

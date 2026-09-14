@@ -160,6 +160,10 @@ mod tests {
             "index.html is missing the installer command"
         );
         assert!(
+            html.contains("id=\"install-heading\">Install</div>"),
+            "index.html is missing the install heading"
+        );
+        assert!(
             html.contains("aria-label=\"Copy installation command\""),
             "index.html is missing the accessible copy control"
         );
