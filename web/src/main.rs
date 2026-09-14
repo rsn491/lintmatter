@@ -3,11 +3,16 @@ mod lint;
 use std::sync::LazyLock;
 
 use axum::Router;
+use axum::body::Body;
+use axum::http::{Response, header};
 use axum::response::Html;
 use axum::routing::{get, post};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 3000;
+const SCORECARD_GIF: &[u8] = include_bytes!("../../docs/img/scorecard.gif");
+const PAGE_CLASS_PLACEHOLDER: &str = "{{PAGE_CLASS}}";
+const PAGE_TITLE_PLACEHOLDER: &str = "{{PAGE_TITLE}}";
 
 /// Where the page expects its token budget settings to be substituted in. The
 /// form has to open on real numbers rather than blanks, and the only numbers
@@ -16,12 +21,17 @@ const DEFAULT_PORT: u16 = 3000;
 const BUDGETS_PLACEHOLDER: &str = "{{BUDGET_SETTINGS}}";
 
 /// The page, rendered once at first request.
-static INDEX_HTML: LazyLock<String> = LazyLock::new(|| render_index(include_str!("index.html")));
+static INDEX_HTML: LazyLock<String> =
+    LazyLock::new(|| render_page(include_str!("index.html"), "landing", "lintmatter"));
+static DEMO_HTML: LazyLock<String> =
+    LazyLock::new(|| render_page(include_str!("index.html"), "demo", "Try lintmatter"));
 
 #[tokio::main]
 async fn main() {
     let app = Router::new()
         .route("/", get(index))
+        .route("/demo", get(demo))
+        .route("/scorecard.gif", get(scorecard))
         .route("/lint", post(lint::handle_lint));
 
     let addr = bind_addr();
@@ -56,6 +66,18 @@ async fn index() -> Html<&'static str> {
     Html(INDEX_HTML.as_str())
 }
 
+async fn demo() -> Html<&'static str> {
+    Html(DEMO_HTML.as_str())
+}
+
+async fn scorecard() -> Response<Body> {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "image/gif")
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .body(Body::from(SCORECARD_GIF))
+        .expect("static scorecard response is valid")
+}
+
 /// Fills the page's placeholder with the budget settings as JSON. Panics on a
 /// page that lost the placeholder: serving a form with no budgets in it would
 /// look like a styling bug while every run went out against nothing.
@@ -65,6 +87,20 @@ fn render_index(template: &str) -> String {
         "index.html no longer contains {BUDGETS_PLACEHOLDER}"
     );
     template.replace(BUDGETS_PLACEHOLDER, &lint::budget_settings_json())
+}
+
+fn render_page(template: &str, page_class: &str, page_title: &str) -> String {
+    assert!(
+        template.contains(PAGE_CLASS_PLACEHOLDER),
+        "index.html no longer contains {PAGE_CLASS_PLACEHOLDER}"
+    );
+    assert!(
+        template.contains(PAGE_TITLE_PLACEHOLDER),
+        "index.html no longer contains {PAGE_TITLE_PLACEHOLDER}"
+    );
+    render_index(template)
+        .replace(PAGE_CLASS_PLACEHOLDER, page_class)
+        .replace(PAGE_TITLE_PLACEHOLDER, page_title)
 }
 
 #[cfg(test)]
@@ -114,6 +150,42 @@ mod tests {
         }
     }
 
+    #[test]
+    fn index_has_the_curl_installer_and_plain_wordmark() {
+        let html = include_str!("index.html");
+        let command = "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh";
+
+        assert!(
+            html.contains(command),
+            "index.html is missing the installer command"
+        );
+        assert!(
+            html.contains("id=\"install-heading\">Install</div>"),
+            "index.html is missing the install heading"
+        );
+        assert!(
+            html.contains("aria-label=\"Copy installation command\""),
+            "index.html is missing the accessible copy control"
+        );
+        assert!(
+            html.contains("src=\"/scorecard.gif\""),
+            "index.html is missing the scorecard demo"
+        );
+        assert!(
+            html.contains("class=\"tool-description\""),
+            "index.html is missing the compact tool description"
+        );
+        assert!(
+            html.find("src=\"/scorecard.gif\"") < html.find("class=\"features\""),
+            "feature cards should follow the scorecard demo"
+        );
+        assert_eq!(&SCORECARD_GIF[..6], b"GIF89a");
+        assert!(
+            !html.contains(".wordmark::before"),
+            "the wordmark still has a leading decoration"
+        );
+    }
+
     /// The served page must carry the linter's real defaults, not a
     /// placeholder the form would then read as `undefined`.
     #[test]
@@ -134,6 +206,23 @@ mod tests {
                 "rendered page is missing {needle}"
             );
         }
+    }
+
+    #[test]
+    fn page_variants_select_the_right_view() {
+        let template = include_str!("index.html");
+        let landing = render_page(template, "landing", "lintmatter");
+        let demo = render_page(template, "demo", "Try lintmatter");
+
+        assert!(landing.contains("<body class=\"landing\">"));
+        assert!(landing.contains("<title>lintmatter</title>"));
+        assert!(landing.contains("A linter for agentic context"));
+        assert!(landing.contains("class=\"landing-cta\" href=\"/demo\""));
+        assert!(demo.contains("<body class=\"demo\">"));
+        assert!(demo.contains("<title>Try lintmatter</title>"));
+        assert!(demo.contains("id=\"runner-heading\">Lint a repository"));
+        assert!(!landing.contains(PAGE_CLASS_PLACEHOLDER));
+        assert!(!demo.contains(PAGE_TITLE_PLACEHOLDER));
     }
 
     #[test]
