@@ -4,6 +4,7 @@ members = ["web"]
 [package]
 name = "lintmatter"
 version = "0.1.1"
+publish = ["crates-io"]
 edition = "2024"
 rust-version = "1.93"
 description = "A linter for agent instruction files: AGENTS.md, SKILL.md, and friends."
