@@ -23,6 +23,11 @@ Or:
 brew install rsn491/tap/lintmatter
 ```
 
+Or with Cargo:
+```sh
+cargo install lintmatter
+```
+
 Run in your repo:
 ```sh
 lintmatter .
