@@ -151,17 +151,22 @@ mod tests {
     }
 
     #[test]
-    fn index_has_the_curl_installer_and_plain_wordmark() {
+    fn index_has_install_methods_and_plain_wordmark() {
         let html = include_str!("index.html");
-        let command = "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh";
+        let curl_command = "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh";
+        let brew_command = "brew install rsn491/tap/lintmatter";
 
         assert!(
-            html.contains(command),
-            "index.html is missing the installer command"
+            html.contains(curl_command),
+            "index.html is missing the curl installer command"
         );
         assert!(
-            html.contains("id=\"install-heading\">Install</div>"),
-            "index.html is missing the install heading"
+            html.contains(brew_command),
+            "index.html is missing the Homebrew installer command"
+        );
+        assert!(
+            html.contains(">Curl</button>") && html.contains(">Homebrew</button>"),
+            "index.html is missing an installation method"
         );
         assert!(
             html.contains("aria-label=\"Copy installation command\""),
