@@ -241,6 +241,10 @@
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.82rem;
   }
+  .shell-prompt {
+    color: var(--muted);
+    user-select: none;
+  }
   .copy-button {
     flex: none;
     min-width: 5.5rem;
@@ -544,7 +548,7 @@
       <button type="button" class="install-tab" aria-pressed="false" data-command="brew install rsn491/tap/lintmatter">Homebrew</button>
     </div>
     <div class="install-command">
-      <code id="install-command">curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh</code>
+      <code><span class="shell-prompt" aria-hidden="true">$ </span><span id="install-command">curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh</span></code>
       <button type="button" class="copy-button" id="copy-install" aria-label="Copy installation command" aria-live="polite">Copy</button>
     </div>
   </section>

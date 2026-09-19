@@ -169,6 +169,10 @@ mod tests {
             "index.html is missing an installation method"
         );
         assert!(
+            html.contains("class=\"shell-prompt\" aria-hidden=\"true\">$ </span>"),
+            "index.html is missing the shell prompt"
+        );
+        assert!(
             html.contains("aria-label=\"Copy installation command\""),
             "index.html is missing the accessible copy control"
         );
