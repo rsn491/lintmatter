@@ -1,0 +1,54 @@
+name: lintmatter
+description: Lint agent instruction files such as AGENTS.md and SKILL.md
+author: rsn491
+
+branding:
+  icon: check-circle
+  color: purple
+
+inputs:
+  paths:
+    description: Newline-delimited files or directories to lint
+    required: false
+    default: .
+  strict:
+    description: Treat warnings as errors
+    required: false
+    default: "false"
+  quiet:
+    description: Report errors only
+    required: false
+    default: "false"
+  config:
+    description: Path to an explicit lintmatter configuration file
+    required: false
+  no-config:
+    description: Disable lintmatter configuration-file discovery
+    required: false
+    default: "false"
+  working-directory:
+    description: Directory in which lintmatter runs
+    required: false
+    default: .
+  version:
+    description: Exact lintmatter CLI version to install
+    required: false
+    default: 0.1.0
+
+runs:
+  using: composite
+  steps:
+    - name: Install and run lintmatter
+      shell: bash
+      env:
+        LINTMATTER_PATHS: ${{ inputs.paths }}
+        LINTMATTER_STRICT: ${{ inputs.strict }}
+        LINTMATTER_QUIET: ${{ inputs.quiet }}
+        LINTMATTER_CONFIG: ${{ inputs.config }}
+        LINTMATTER_NO_CONFIG: ${{ inputs.no-config }}
+        LINTMATTER_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        LINTMATTER_VERSION: ${{ inputs.version }}
+        LINTMATTER_RUNNER_OS: ${{ runner.os }}
+        LINTMATTER_RUNNER_ARCH: ${{ runner.arch }}
+        LINTMATTER_RUNNER_TEMP: ${{ runner.temp }}
+      run: '"${{ github.action_path }}/.github/action/run.sh"'
