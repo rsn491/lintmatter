@@ -4,35 +4,40 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{PAGE_TITLE}}</title>
+<meta name="description" content="Lint AGENTS.md and SKILL.md files for broken references, invalid front matter, and exceeded token budgets.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="lintmatter">
+<meta property="og:description" content="A linter for agentic context.">
+<meta property="og:image" content="https://lintmatter.onrender.com/thumbnail.png">
+<meta property="og:image:width" content="1254">
+<meta property="og:image:height" content="1254">
+<meta property="og:image:alt" content="lintmatter logo">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="lintmatter">
+<meta name="twitter:description" content="A linter for agentic context.">
+<meta name="twitter:image" content="https://lintmatter.onrender.com/thumbnail.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<link rel="apple-touch-icon" href="/favicon.png">
 <style>
   :root {
-    color-scheme: light dark;
-    --accent: #2563eb;
+    color-scheme: light;
+    --page: #f7f0e3;
+    --text: #131313;
+    --accent: #2d2d2d;
+    --accent-hover: #464646;
     --accent-contrast: #fff;
-    --muted: #6b7280;
-    --surface: color-mix(in srgb, currentColor 4%, transparent);
-    --surface-raised: color-mix(in srgb, currentColor 2%, transparent);
-    --border: color-mix(in srgb, currentColor 14%, transparent);
-    --border-strong: color-mix(in srgb, currentColor 28%, transparent);
+    --muted: #464646;
+    --surface: #fff;
+    --surface-raised: #fff;
+    --surface-tinted: #ecdbbb;
+    --border: #ecdbbb;
+    --border-strong: #464646;
     --radius: 10px;
     /* The score bands, mirroring score_color in src/report/text.rs. */
     --score-green: #15803d;
     --score-yellow: #a16207;
     --score-orange: #c2410c;
     --score-red: #b91c1c;
-  }
-  /* The page follows the OS theme, so the bands need a lighter set to stay
-     legible on a dark background. */
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --accent: #60a5fa;
-      --accent-contrast: #111827;
-      --muted: #a3a3a3;
-      --score-green: #4ade80;
-      --score-yellow: #facc15;
-      --score-orange: #fb923c;
-      --score-red: #f87171;
-    }
   }
   *, *::before, *::after { box-sizing: border-box; }
   body {
@@ -42,12 +47,12 @@
     flex-direction: column;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     line-height: 1.5;
-    background: Canvas;
-    color: CanvasText;
+    background: var(--page);
+    color: var(--text);
   }
 
   .site-header {
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface-tinted) 46%, var(--page));
     border-bottom: 1px solid var(--border);
   }
   .header-inner {
@@ -140,10 +145,10 @@
     padding: 1rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    background: color-mix(in srgb, var(--feature-color) 4%, transparent);
+    background: color-mix(in srgb, var(--feature-color) 7%, var(--surface));
   }
-  .features li:nth-child(2) { --feature-color: #4f46e5; }
-  .features li:nth-child(3) { --feature-color: #0891b2; }
+  .features li:nth-child(2) { --feature-color: #464646; }
+  .features li:nth-child(3) { --feature-color: #131313; }
   .feature-icon {
     display: grid;
     place-items: center;
@@ -174,10 +179,6 @@
     font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.03em;
-  }
-  @media (prefers-color-scheme: dark) {
-    .features li:nth-child(2) { --feature-color: #818cf8; }
-    .features li:nth-child(3) { --feature-color: #22d3ee; }
   }
   @media (max-width: 680px) {
     .features ul { grid-template-columns: 1fr; }
@@ -222,7 +223,7 @@
     filter: none;
   }
   .install-tab[aria-pressed="true"] {
-    color: CanvasText;
+    color: var(--text);
     box-shadow: inset 0 -2px var(--accent);
   }
   .install-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
@@ -338,7 +339,7 @@
     cursor: pointer;
     font-weight: 600;
   }
-  button:hover:not(:disabled) { filter: brightness(1.08); }
+  #submit-btn:hover:not(:disabled) { background: var(--accent-hover); }
   button:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 30%, transparent); outline-offset: 2px; }
   button:disabled {
     background: color-mix(in srgb, var(--accent) 45%, transparent);
