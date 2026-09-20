@@ -18,14 +18,13 @@ Install:
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh
 ```
 
-Or with Homebrew or Cargo:
+Alternatively, you can install via Homebrew or Cargo:
 ```sh
 brew install rsn491/tap/lintmatter
-# or
 cargo install lintmatter
 ```
 
-Run in your repo:
+Once installed, run it in your repo:
 ```sh
 lintmatter .
 ```
