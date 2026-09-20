@@ -183,6 +183,20 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
         break;
     }
     if open == -1 {
+        // No fence at the top. A `---` block further down may still be front
+        // matter someone put in the wrong place, so say so rather than
+        // reporting the vaguer "missing front matter".
+        if let Some(line) = misplaced_frontmatter(&lines) {
+            return (
+                Frontmatter::default(),
+                text.clone(),
+                Some(Error {
+                    kind: ErrKind::NotFirst,
+                    line,
+                    msg: "front matter must start on the first line of the file".to_string(),
+                }),
+            );
+        }
         return (Frontmatter::default(), text, None);
     }
     if open > 0 {
@@ -205,12 +219,17 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
         .find(|(_, line)| CLOSE_FENCE_RE.is_match(fence_line(line)))
         .map(|(i, _)| i);
     let Some(close_idx) = close_idx else {
+        // With no closing fence there is no block to remove, so the body is
+        // everything after the opening fence. Dropping that one line is what
+        // keeps the unterminated case consistent with every other path, where
+        // the fence never counts toward the content budget.
+        let body = lines[open + 1..].join("\n");
         return (
             Frontmatter {
                 present: true,
                 ..Default::default()
             },
-            text.clone(),
+            body,
             Some(Error {
                 kind: ErrKind::Unterminated,
                 line: open + 1,
@@ -293,6 +312,49 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
 
 /// Renders a scalar YAML node as a string. Shared with the config loader,
 /// which reads the same flavor of YAML.
+/// Finds a `---` block below the top of the file that is really misplaced
+/// front matter, returning its 1-based opening line.
+///
+/// The test is deliberately strict, because `---` is also how markdown writes
+/// a thematic break: the block must close, parse as a YAML mapping, and carry
+/// `name` or `description`. A horizontal rule cannot satisfy that, so ordinary
+/// prose is never flagged.
+fn misplaced_frontmatter(lines: &[&str]) -> Option<usize> {
+    for (i, line) in lines.iter().enumerate() {
+        if !OPEN_FENCE_RE.is_match(fence_line(line)) {
+            continue;
+        }
+        // A candidate that does not close is not front matter, but the scan
+        // continues: a real block may still follow it.
+        let Some(close) = lines
+            .iter()
+            .enumerate()
+            .skip(i + 1)
+            .find(|(_, l)| CLOSE_FENCE_RE.is_match(fence_line(l)))
+            .map(|(j, _)| j)
+        else {
+            continue;
+        };
+        let block = lines[i + 1..close].join("\n");
+        let Ok(docs) = MarkedYaml::load_from_str(&block) else {
+            continue;
+        };
+        let Some(root) = docs.into_iter().next() else {
+            continue;
+        };
+        let YamlData::Mapping(map) = &root.data else {
+            continue;
+        };
+        let names_a_skill = map.keys().any(|k| {
+            scalar_string(&k.data).is_some_and(|key| key == "name" || key == "description")
+        });
+        if names_a_skill {
+            return Some(i + 1);
+        }
+    }
+    None
+}
+
 pub fn scalar_string<'a>(data: &YamlData<'a, MarkedYaml<'a>>) -> Option<String> {
     match data {
         YamlData::Value(scalar) => Some(stringify_scalar(scalar)),
@@ -417,6 +479,90 @@ mod tests {
                 "{name}: message should be one line"
             );
         }
+    }
+
+    #[test]
+    fn misplaced_frontmatter_is_distinguished_from_a_thematic_break() {
+        // Reported: a `---` block below the top that really is front matter.
+        let cases: &[(&str, &str)] = &[
+            (
+                "after a heading",
+                "# My Skill\n\n---\nname: my-skill\ndescription: Does a thing.\n---\nBody.\n",
+            ),
+            (
+                "after prose",
+                "Some intro.\n\n---\ndescription: Does a thing.\n---\nBody.\n",
+            ),
+        ];
+        for (name, src) in cases {
+            let d = Document::parse(src.as_bytes());
+            let err = d.error.unwrap_or_else(|| panic!("{name}: want an error"));
+            assert_eq!(err.kind, ErrKind::NotFirst, "{name}");
+            assert_eq!(err.line, 3, "{name}");
+        }
+
+        // A candidate fence that never closes must not stop the scan: real
+        // front matter can still follow it.
+        let d = Document::parse(
+            b"# Title\n\n---\n\nA break with no partner.\n\n---\nname: late-skill\ndescription: Real front matter, in the wrong place.\n---\n",
+        );
+        let err = d.error.expect("want an error after an unclosed candidate");
+        assert_eq!(err.kind, ErrKind::NotFirst);
+        assert_eq!(err.line, 7);
+
+        // Not reported: `---` used as a thematic break, which is what most
+        // `---` in markdown is. Flagging these would be far worse than the
+        // vaguer message they replace.
+        let quiet: &[(&str, &str)] = &[
+            ("thematic break", "# Title\n\n---\n\nA new section.\n"),
+            (
+                "setext underline",
+                "Title\n---\n\nBody text under a setext heading.\n",
+            ),
+            (
+                "block without skill keys",
+                "# Title\n\n---\nfoo: bar\n---\n\nBody.\n",
+            ),
+            (
+                "block that never closes",
+                "# Title\n\n---\nname: unclosed\n",
+            ),
+            (
+                "unparseable block",
+                "# Title\n\n---\nname: ok\n  bad: indent\n---\n",
+            ),
+            (
+                "two thematic breaks",
+                "# Title\n\n---\n\nSection.\n\n---\n\nAnother.\n",
+            ),
+        ];
+        for (name, src) in quiet {
+            let d = Document::parse(src.as_bytes());
+            assert!(
+                d.error.is_none(),
+                "{name}: unexpected {:?}",
+                d.error.map(|e| e.msg)
+            );
+            assert!(!d.frontmatter.present, "{name}");
+        }
+    }
+
+    #[test]
+    fn unterminated_frontmatter_excludes_the_opening_fence() {
+        // Every other path keeps the fence out of the body; with no closing
+        // fence there is no block to remove, so the body is everything after
+        // the opening line. Small in tokens, but it makes the rule uniform.
+        let d = Document::parse(b"---\nname: open-ended\nbody without a closing fence\n");
+        assert_eq!(d.error.map(|e| e.kind), Some(ErrKind::Unterminated));
+        assert!(!d.body.starts_with("---"), "body = {:?}", d.body);
+        assert!(
+            d.body.starts_with("name: open-ended"),
+            "body = {:?}",
+            d.body
+        );
+
+        // The body is otherwise intact, so budgets still see the real content.
+        assert!(d.body.contains("body without a closing fence"));
     }
 
     #[test]
