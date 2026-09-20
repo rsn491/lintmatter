@@ -3,7 +3,8 @@ members = ["web"]
 
 [package]
 name = "lintmatter"
-version = "0.1.1"
+version = "0.1.0"
+publish = ["crates-io"]
 edition = "2024"
 rust-version = "1.93"
 description = "A linter for agent instruction files: AGENTS.md, SKILL.md, and friends."
@@ -44,6 +45,10 @@ cargo-dist-version = "0.31.0"
 ci = "github"
 # The installers to generate for each app
 installers = ["shell", "homebrew"]
+# Publish prerelease tags to crates.io as prerelease versions too
+publish-prereleases = true
+# The crates.io publisher authenticates through GitHub OIDC
+github-custom-job-permissions = { "publish-crate" = { contents = "read", id-token = "write" } }
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # Path that installers should place binaries in
@@ -53,4 +58,4 @@ install-updater = false
 # A GitHub repo to push Homebrew formulas to
 tap = "rsn491/homebrew-tap"
 # Publish jobs to run in CI
-publish-jobs = ["homebrew"]
+publish-jobs = ["homebrew", "./publish-crate"]
