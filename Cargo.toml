@@ -40,11 +40,11 @@ lto = "thin"
 # Config for 'dist'
 [workspace.metadata.dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.31.0"
+cargo-dist-version = "0.33.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
-installers = ["shell", "homebrew"]
+installers = ["shell", "homebrew", "npm"]
 # Publish prerelease tags to crates.io as prerelease versions too
 publish-prereleases = true
 # The crates.io publisher authenticates through GitHub OIDC
@@ -58,4 +58,4 @@ install-updater = false
 # A GitHub repo to push Homebrew formulas to
 tap = "rsn491/homebrew-tap"
 # Publish jobs to run in CI
-publish-jobs = ["homebrew", "./publish-crate"]
+publish-jobs = ["homebrew", "npm", "./publish-crate"]

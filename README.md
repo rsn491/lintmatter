@@ -18,10 +18,11 @@ Install:
 curl -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh
 ```
 
-Alternatively, you can install via Homebrew or Cargo:
+Alternatively, you can install via Homebrew, Cargo, or npm:
 ```sh
 brew install rsn491/tap/lintmatter
 cargo install lintmatter
+npm install -g lintmatter
 ```
 
 Once installed, run it in your repo:
