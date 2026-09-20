@@ -266,7 +266,7 @@ jobs:
         run: |
           # Remove the granular manifests
           rm -f artifacts/*-dist-manifest.json
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         env:
           PRERELEASE_FLAG: "${{ fromJson(steps.host.outputs.manifest).announcement_is_prerelease && '--prerelease' || '' }}"
           ANNOUNCEMENT_TITLE: "${{ fromJson(steps.host.outputs.manifest).announcement_title }}"
@@ -276,8 +276,13 @@ jobs:
           # Write and read notes from a file to avoid quoting breaking things
           echo "$ANNOUNCEMENT_BODY" > $RUNNER_TEMP/notes.txt
 
-          gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
-
+          if gh release view "${{ needs.plan.outputs.tag }}" > /dev/null 2>&1; then
+            # The Marketplace publishing UI creates the release before this
+            # workflow has built its cargo-dist artifacts.
+            gh release upload "${{ needs.plan.outputs.tag }}" --clobber artifacts/*
+          else
+            gh release create "${{ needs.plan.outputs.tag }}" --target "$RELEASE_COMMIT" $PRERELEASE_FLAG --title "$ANNOUNCEMENT_TITLE" --notes-file "$RUNNER_TEMP/notes.txt" artifacts/*
+          fi
   publish-homebrew-formula:
     needs:
       - plan
@@ -337,6 +342,35 @@ jobs:
     permissions:
       "contents": "read"
       "id-token": "write"
+
+  update-action-tag:
+    needs:
+      - plan
+      - host
+      - publish-homebrew-formula
+      - custom-publish-crate
+    if: ${{ always() && needs.host.result == 'success' && (needs.publish-homebrew-formula.result == 'skipped' || needs.publish-homebrew-formula.result == 'success') && (needs.custom-publish-crate.result == 'skipped' || needs.custom-publish-crate.result == 'success') }}
+    runs-on: "ubuntu-22.04"
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: "${{ needs.plan.outputs.tag }}"
+      RELEASE_IS_PRERELEASE: "${{ fromJson(needs.plan.outputs.val).announcement_is_prerelease }}"
+    steps:
+      - name: Move the major Action tag
+        shell: bash
+        run: |
+          if [[ "$RELEASE_IS_PRERELEASE" == true || ! "$RELEASE_TAG" =~ ^v?([0-9]+)\.[0-9]+\.[0-9]+(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Not moving a major tag for prerelease or non-SemVer tag $RELEASE_TAG"
+            exit 0
+          fi
+
+          major_tag="v${BASH_REMATCH[1]}"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$major_tag" > /dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$major_tag" -f sha="$GITHUB_SHA" -F force=true > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$major_tag" -f sha="$GITHUB_SHA" > /dev/null
+          fi
+          echo "Moved $major_tag to $GITHUB_SHA"
 
   announce:
     needs:
