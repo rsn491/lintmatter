@@ -1,8 +1,8 @@
 # lintmatter
 
-A linter for agent context files: `AGENTS.md`, skills, etc.; ensuring they're properly formatted and follow best practices.
+A linter that checks agent context files such as `AGENTS.md` and `SKILL.md` for proper formatting and best practices.
 
-Demo: [lintmatter.onrender.com](https://lintmatter.onrender.com/)
+[Try the demo](https://lintmatter.onrender.com/demo)
 
 Features:
 - Detects broken references
@@ -15,7 +15,7 @@ Features:
 
 Install:
 ```sh
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh
+curl -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh
 ```
 
 Alternatively, you can install via Homebrew or Cargo:
@@ -109,7 +109,7 @@ rounded down the same way.
 ```yaml
 - name: Lint agent instruction files
   run: |
-    cargo install --path .
+    curl -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh
     lintmatter --strict .
 ```
 
