@@ -10,7 +10,9 @@ use axum::routing::{get, post};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 3000;
+const FAVICON_PNG: &[u8] = include_bytes!("../../docs/img/favicon.png");
 const SCORECARD_GIF: &[u8] = include_bytes!("../../docs/img/scorecard.gif");
+const THUMBNAIL_PNG: &[u8] = include_bytes!("../../docs/img/thumbnail.png");
 const PAGE_CLASS_PLACEHOLDER: &str = "{{PAGE_CLASS}}";
 const PAGE_TITLE_PLACEHOLDER: &str = "{{PAGE_TITLE}}";
 
@@ -31,7 +33,9 @@ async fn main() {
     let app = Router::new()
         .route("/", get(index))
         .route("/demo", get(demo))
+        .route("/favicon.png", get(favicon))
         .route("/scorecard.gif", get(scorecard))
+        .route("/thumbnail.png", get(thumbnail))
         .route("/lint", post(lint::handle_lint));
 
     let addr = bind_addr();
@@ -70,12 +74,28 @@ async fn demo() -> Html<&'static str> {
     Html(DEMO_HTML.as_str())
 }
 
+async fn favicon() -> Response<Body> {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "image/png")
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .body(Body::from(FAVICON_PNG))
+        .expect("static favicon response is valid")
+}
+
 async fn scorecard() -> Response<Body> {
     Response::builder()
         .header(header::CONTENT_TYPE, "image/gif")
         .header(header::CACHE_CONTROL, "public, max-age=86400")
         .body(Body::from(SCORECARD_GIF))
         .expect("static scorecard response is valid")
+}
+
+async fn thumbnail() -> Response<Body> {
+    Response::builder()
+        .header(header::CONTENT_TYPE, "image/png")
+        .header(header::CACHE_CONTROL, "public, max-age=86400")
+        .body(Body::from(THUMBNAIL_PNG))
+        .expect("static thumbnail response is valid")
 }
 
 /// Fills the page's placeholder with the budget settings as JSON. Panics on a
@@ -196,10 +216,25 @@ mod tests {
             "feature cards should follow the scorecard demo"
         );
         assert_eq!(&SCORECARD_GIF[..6], b"GIF89a");
+        assert_eq!(&THUMBNAIL_PNG[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(&FAVICON_PNG[..8], b"\x89PNG\r\n\x1a\n");
         assert!(
             !html.contains(".wordmark::before"),
             "the wordmark still has a leading decoration"
         );
+    }
+
+    #[test]
+    fn index_uses_the_thumbnail_for_icons_and_link_previews() {
+        let html = include_str!("index.html");
+        for needle in [
+            "rel=\"icon\" type=\"image/png\" href=\"/favicon.png\"",
+            "rel=\"apple-touch-icon\" href=\"/favicon.png\"",
+            "property=\"og:image\" content=\"https://lintmatter.onrender.com/thumbnail.png\"",
+            "name=\"twitter:image\" content=\"https://lintmatter.onrender.com/thumbnail.png\"",
+        ] {
+            assert!(html.contains(needle), "index.html is missing {needle:?}");
+        }
     }
 
     /// The served page must carry the linter's real defaults, not a
