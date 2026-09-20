@@ -153,7 +153,7 @@ mod tests {
     #[test]
     fn index_has_install_methods_and_plain_wordmark() {
         let html = include_str!("index.html");
-        let curl_command = "curl --proto '=https' --tlsv1.2 -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh";
+        let curl_command = "curl -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh";
         let brew_command = "brew install rsn491/tap/lintmatter";
         let cargo_command = "cargo install lintmatter";
 

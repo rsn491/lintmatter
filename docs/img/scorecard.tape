@@ -1,4 +1,4 @@
-Output "/Users/ricardo/code_repos/lintmatter/docs/img/scorecard.gif"
+Output "docs/img/scorecard.gif"
 Set Shell "zsh"
 Set FontFamily "Menlo"
 Set FontSize 23
@@ -14,7 +14,7 @@ Set TypingSpeed 45ms
 Hide
 Type "unset NO_COLOR"
 Enter
-Type "lintmatter() { /Users/ricardo/code_repos/lintmatter/target/debug/lintmatter testdata/broken; tput civis; sleep 10; }"
+Type "lintmatter() { ./target/debug/lintmatter testdata/broken; tput civis; sleep 10; }"
 Enter
 Type "clear"
 Enter
