@@ -7,7 +7,7 @@ version = "0.1.0"
 publish = ["crates-io"]
 edition = "2024"
 rust-version = "1.93"
-description = "A linter for agent instruction files: AGENTS.md, SKILL.md, and friends."
+description = "A linter for agentic context"
 repository = "https://github.com/rsn491/lintmatter"
 homepage = "https://github.com/rsn491/lintmatter"
 license = "MIT"
@@ -40,11 +40,11 @@ lto = "thin"
 # Config for 'dist'
 [workspace.metadata.dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
-cargo-dist-version = "0.31.0"
+cargo-dist-version = "0.33.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
-installers = ["shell", "homebrew"]
+installers = ["shell", "homebrew", "npm"]
 # Publish prerelease tags to crates.io as prerelease versions too
 publish-prereleases = true
 # The crates.io publisher authenticates through GitHub OIDC
@@ -58,4 +58,4 @@ install-updater = false
 # A GitHub repo to push Homebrew formulas to
 tap = "rsn491/homebrew-tap"
 # Publish jobs to run in CI
-publish-jobs = ["homebrew", "./publish-crate"]
+publish-jobs = ["homebrew", "npm", "./publish-crate"]

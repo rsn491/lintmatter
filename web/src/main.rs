@@ -176,6 +176,7 @@ mod tests {
         let curl_command = "curl -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh";
         let brew_command = "brew install rsn491/tap/lintmatter";
         let cargo_command = "cargo install lintmatter";
+        let npm_command = "npm install -g lintmatter";
 
         assert!(
             html.contains(curl_command),
@@ -190,9 +191,14 @@ mod tests {
             "index.html is missing the Cargo installer command"
         );
         assert!(
+            html.contains(npm_command),
+            "index.html is missing the npm installer command"
+        );
+        assert!(
             html.contains(">Curl</button>")
                 && html.contains(">Homebrew</button>")
-                && html.contains(">Cargo</button>"),
+                && html.contains(">Cargo</button>")
+                && html.contains(">npm</button>"),
             "index.html is missing an installation method"
         );
         assert!(
