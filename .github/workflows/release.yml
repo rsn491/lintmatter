@@ -385,14 +385,3 @@ jobs:
         with:
           persist-credentials: false
           submodules: recursive
-
-  custom-update-action-tag:
-    needs:
-      - plan
-      - announce
-    uses: ./.github/workflows/update-action-tag.yml
-    with:
-      plan: ${{ needs.plan.outputs.val }}
-    secrets: inherit
-    permissions:
-      "contents": "write"
