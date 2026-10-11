@@ -48,7 +48,7 @@ installers = ["shell", "homebrew", "npm"]
 # Publish prerelease tags to crates.io as prerelease versions too
 publish-prereleases = true
 # The crates.io publisher authenticates through GitHub OIDC
-github-custom-job-permissions = { "publish-crate" = { contents = "read", id-token = "write" } }
+github-custom-job-permissions = { "publish-crate" = { contents = "read", id-token = "write" }, "update-action-tag" = { contents = "write" } }
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # Path that installers should place binaries in
@@ -59,3 +59,5 @@ install-updater = false
 tap = "rsn491/homebrew-tap"
 # Publish jobs to run in CI
 publish-jobs = ["homebrew", "npm", "./publish-crate"]
+# Action consumers need a stable major-version reference.
+post-announce-jobs = ["./update-action-tag"]
