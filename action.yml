@@ -1,5 +1,5 @@
 name: lintmatter
-description: Lint agent instruction files such as AGENTS.md and SKILL.md
+description: A linter for agentic context
 author: rsn491
 
 branding:
