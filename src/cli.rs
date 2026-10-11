@@ -1,6 +1,6 @@
 //! Wires flags, discovery, linting and reporting together.
 
-use std::io::Write;
+use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 use crate::config::{
@@ -8,6 +8,7 @@ use crate::config::{
     DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
 };
 use crate::discover;
+use crate::init;
 use crate::lint;
 use crate::report;
 
@@ -152,7 +153,7 @@ enum ParseOutcome {
 
 /// Splits a token's flag name from any inline `=value`, stripping one or two
 /// leading dashes.
-fn split_flag(token: &str) -> (&str, Option<&str>) {
+pub(crate) fn split_flag(token: &str) -> (&str, Option<&str>) {
     let stripped = token
         .strip_prefix("--")
         .or_else(|| token.strip_prefix('-'))
@@ -283,7 +284,7 @@ fn parse_args(args: &[String]) -> ParseOutcome {
     ParseOutcome::Flags(f)
 }
 
-fn parse_bool_inline(inline: Option<&str>) -> bool {
+pub(crate) fn parse_bool_inline(inline: Option<&str>) -> bool {
     match inline {
         Some(v) => v != "false" && v != "0",
         None => true,
@@ -291,17 +292,29 @@ fn parse_bool_inline(inline: Option<&str>) -> bool {
 }
 
 /// Executes lintmatter and returns the process exit code. Findings go to stdout;
-/// usage and I/O problems go to stderr. `is_terminal` decides whether
+/// usage and I/O problems go to stderr. `stdin` is only read by the `init`
+/// subcommand, which takes it as an argument for the same reason the writers
+/// are arguments. `is_terminal` decides whether
 /// `--color auto` colorizes output; callers pass whether their real stdout
 /// is a terminal rather than this function inspecting the process's actual
 /// file descriptors, so tests can pin the "auto" behavior instead of it
 /// depending on however the test binary's stdout happens to be attached.
 pub fn run(
     args: &[String],
+    stdin: &mut impl BufRead,
     stdout: &mut impl Write,
     stderr: &mut impl Write,
     is_terminal: bool,
 ) -> i32 {
+    // Dispatched before the flags are parsed: `parse_args` treats the first
+    // non-dash token as a path, so a subcommand would otherwise be read as a
+    // file to lint. Matching only the first argument leaves `lintmatter ./init`
+    // and `lintmatter --strict init` meaning the path they always meant.
+    if args.first().map(String::as_str) == Some("init") {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        return init::run(&args[1..], stdin, stdout, stderr, &cwd);
+    }
+
     let f = match parse_args(args) {
         ParseOutcome::Flags(f) => f,
         ParseOutcome::Help => {
@@ -465,6 +478,10 @@ fn print_usage(w: &mut impl Write) {
 
 Usage:
   lintmatter [flags] [path...]
+  lintmatter init [--force]
+
+`lintmatter init` walks through the settings a config file can carry and writes
+a .lintmatter.yaml for you.
 
 Paths may be files or directories; directories are walked recursively for
 AGENTS.md and SKILL.md. With no path given, the current directory is used.
@@ -522,7 +539,7 @@ mod tests {
         let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
         let mut out = Vec::new();
         let mut err = Vec::new();
-        let code = run(&args, &mut out, &mut err, false);
+        let code = run(&args, &mut "".as_bytes(), &mut out, &mut err, false);
         (
             code,
             String::from_utf8(out).unwrap(),
@@ -547,7 +564,13 @@ mod tests {
     fn run_into_failing_writer(kind: std::io::ErrorKind, path: &str) -> (i32, String) {
         let args = vec![path.to_string()];
         let mut err = Vec::new();
-        let code = run(&args, &mut FailingWriter(kind), &mut err, false);
+        let code = run(
+            &args,
+            &mut "".as_bytes(),
+            &mut FailingWriter(kind),
+            &mut err,
+            false,
+        );
         (code, String::from_utf8(err).unwrap())
     }
 
@@ -1091,5 +1114,29 @@ mod tests {
         let (code_dot, stdout_dot, _) = run_args(&["."]);
         assert_eq!(code_default, code_dot);
         assert_eq!(stdout_default, stdout_dot);
+    }
+
+    #[test]
+    fn init_is_dispatched_as_a_subcommand() {
+        // A bad flag proves the wizard parsed this, not the lint run: the
+        // error is init's, and nothing was treated as a path. The case is
+        // chosen to fail before any file is written, since this test runs in
+        // the repository's own working directory.
+        let (code, stdout, stderr) = run_raw(&["init", "--wizard"]);
+        assert_eq!(code, EXIT_USAGE, "stdout={stdout} stderr={stderr}");
+        assert!(stderr.contains("lintmatter init [--force]"), "{stderr}");
+
+        // Only the first argument names a subcommand, so a path that happens
+        // to be spelled "init" is still a path.
+        let (code, stdout, stderr) = run_args(&["./init"]);
+        assert_eq!(code, EXIT_USAGE, "stdout={stdout} stderr={stderr}");
+        assert!(stderr.contains("cannot read"), "{stderr}");
+    }
+
+    #[test]
+    fn usage_lists_the_init_subcommand() {
+        let (code, _, stderr) = run_raw(&["--help"]);
+        assert_eq!(code, EXIT_OK);
+        assert!(stderr.contains("lintmatter init [--force]"), "{stderr}");
     }
 }

@@ -8,6 +8,7 @@ fn main() {
     let is_terminal = std::io::stdout().is_terminal();
     let code = lintmatter::cli::run(
         &args,
+        &mut std::io::stdin().lock(),
         &mut std::io::stdout(),
         &mut std::io::stderr(),
         is_terminal,
