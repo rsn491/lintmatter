@@ -1,0 +1,38 @@
+name: Update GitHub Action
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  update-github-action:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    name: Move the major GitHub Action tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TAG: ${{ github.event.workflow_run.head_branch }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Move the major GitHub Action tag
+        shell: bash
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v?([0-9]+)\.[0-9]+\.[0-9]+(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Not moving the major GitHub Action tag for prerelease or non-SemVer tag $RELEASE_TAG"
+            exit 0
+          fi
+
+          major_tag="v${BASH_REMATCH[1]}"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$major_tag" > /dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$major_tag" -f sha="$RELEASE_SHA" -F force=true > /dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$major_tag" -f sha="$RELEASE_SHA" > /dev/null
+          fi
+          echo "Moved the major GitHub Action tag $major_tag to $RELEASE_SHA"

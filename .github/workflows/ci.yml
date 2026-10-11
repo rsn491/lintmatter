@@ -9,6 +9,40 @@ permissions:
   contents: read
 
 jobs:
+  action:
+    name: GitHub Action
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Test Action shell entrypoint
+        run: .github/action/test.sh
+
+      - name: Lint clean fixtures with the published CLI
+        uses: ./
+        with:
+          no-config: true
+          paths: |
+            testdata/clean/AGENTS.md
+            testdata/clean/skills
+
+      - name: Lint broken fixtures
+        id: broken
+        continue-on-error: true
+        uses: ./
+        with:
+          no-config: true
+          paths: testdata/broken
+
+      - name: Require broken fixtures to fail
+        if: steps.broken.outcome != 'failure'
+        run: |
+          echo "The action unexpectedly accepted the broken fixtures" >&2
+          exit 1
+
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
