@@ -8,6 +8,7 @@ use crate::config::{
     DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
 };
 use crate::discover;
+use crate::fix;
 use crate::lint;
 use crate::report;
 
@@ -37,6 +38,7 @@ struct Flags {
     quiet: bool,
     show_version: bool,
     list_rules: bool,
+    fix: bool,
     excludes: Vec<String>,
     disabled: Vec<String>,
     config: Option<String>,
@@ -57,6 +59,7 @@ impl Default for Flags {
             quiet: false,
             show_version: false,
             list_rules: false,
+            fix: false,
             excludes: Vec::new(),
             disabled: Vec::new(),
             config: None,
@@ -78,6 +81,7 @@ struct Resolved {
     color: String,
     strict: bool,
     quiet: bool,
+    fix: bool,
     excludes: Vec<String>,
     disabled: Vec<String>,
     paths: Vec<String>,
@@ -115,6 +119,7 @@ fn resolve(f: Flags, cfg: config::Settings) -> Resolved {
         color: f.color,
         strict: f.strict,
         quiet: f.quiet,
+        fix: f.fix,
         excludes,
         disabled,
         paths: if f.paths.is_empty() {
@@ -222,6 +227,7 @@ fn parse_args(args: &[String]) -> ParseOutcome {
             "h" | "help" => return ParseOutcome::Help,
             "version" => f.show_version = true,
             "list-rules" => f.list_rules = true,
+            "fix" => f.fix = parse_bool_inline(inline),
             "strict" => f.strict = parse_bool_inline(inline),
             "quiet" => f.quiet = parse_bool_inline(inline),
             "no-config" => f.no_config = parse_bool_inline(inline),
@@ -392,6 +398,36 @@ pub fn run(
         }
     }
 
+    // Apply fixes if --fix flag is set
+    if f.fix {
+        let fixes = fix::generate_fixes(&results, &f.paths, &f.excludes);
+        if !fixes.is_empty() {
+            match fix::apply_fixes(&fixes, false) {
+                Ok(applied) => {
+                    for fix_msg in applied {
+                        let _ = writeln!(stdout, "{fix_msg}");
+                    }
+                }
+                Err(e) => {
+                    let _ = writeln!(stderr, "lintmatter: {e}");
+                    return EXIT_USAGE;
+                }
+            }
+            // Re-run linting after fixes to update the report
+            let mut new_results = Vec::with_capacity(targets.len());
+            for t in &targets {
+                match linter.file(t) {
+                    Ok(res) => new_results.push(res),
+                    Err(msg) => {
+                        let _ = writeln!(stderr, "lintmatter: {msg}");
+                        return EXIT_USAGE;
+                    }
+                }
+            }
+            results = new_results;
+        }
+    }
+
     // Summarized once and handed to the reporter, rather than each reporter
     // recomputing it and the exit code recomputing it again.
     let summary = report::summarize(&results);
@@ -496,6 +532,7 @@ Flags:
   --no-config                           ignore any config file
   --strict                              treat warnings as errors
   --quiet                               report errors only
+  --fix                                fix broken references by replacing with exact file name match
   --format text|json                    output format (default "text")
   --color auto|always|never             colorize and decorate text output (default "auto")
   --list-rules                          print every rule id and exit

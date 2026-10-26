@@ -26,6 +26,7 @@ regex = "1"
 glob = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+pathdiff = "0.2"
 
 [dev-dependencies]
 tempfile = "3"
