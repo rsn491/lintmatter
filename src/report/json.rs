@@ -14,13 +14,8 @@ struct JsonReport<'a> {
     summary: Summary,
 }
 
-/// A serialization view of [`FileResult`].
-///
-/// Findings no longer store their file -- it is always the enclosing result's
-/// path -- so the view re-attaches it, keeping the JSON shape it has always
-/// had. Field order here is the wire order, so it matches the structs it
-/// mirrors. Building a view also means `--quiet` filters while walking instead
-/// of cloning whole results to drop their warnings.
+/// Serialization view of [`FileResult`]: re-attaches `file` to each finding to
+/// keep the wire format, and filters `--quiet` warnings without cloning.
 #[derive(serde::Serialize)]
 struct JsonFile<'a> {
     path: &'a str,

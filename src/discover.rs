@@ -36,11 +36,7 @@ pub struct Target {
     pub root: PathBuf,
 }
 
-/// How deep the walk will recurse before giving up.
-///
-/// A directory tree this deep is a symlink loop the filesystem resolved for us
-/// or a pathological layout, either way not something to blow the stack over.
-/// Real repositories are an order of magnitude shallower.
+/// Recursion limit, so a pathological layout cannot exhaust the stack.
 const MAX_DEPTH: usize = 64;
 
 /// Never walked: holds dependencies and build output, whose instruction files
@@ -393,7 +389,6 @@ mod tests {
         let err = find(&[dir.path().to_string_lossy().to_string()], &[]).unwrap_err();
         assert!(err.contains("directories deep"), "{err}");
 
-        // A tree within the limit still walks all the way down.
         let ok_dir = tempfile::tempdir().unwrap();
         let shallow: PathBuf = (0..MAX_DEPTH - 1).map(|i| format!("d{i}")).collect();
         fs::create_dir_all(ok_dir.path().join(&shallow)).unwrap();

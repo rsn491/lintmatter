@@ -163,18 +163,11 @@ fn split_flag(token: &str) -> (&str, Option<&str>) {
     }
 }
 
-/// Walks the argument list, holding the cursor so a flag needing a value can
-/// consume the next argument.
-///
-/// This used to be two `macro_rules!` blocks inside `parse_args`: one mutated
-/// the caller's loop index, the other early-returned from the enclosing
-/// function. Both were invisible at the call site. As methods returning
-/// `Result`, the control flow is written where it happens.
+/// Walks the argument list; a flag needing a value consumes the next argument.
 struct ArgParser<'a> {
     args: &'a [String],
     i: usize,
-    /// Budgets given a negative value, collected so every offender is named at
-    /// once rather than only the first.
+    /// Collected so the error names every negative budget at once.
     negative: Vec<String>,
 }
 
@@ -187,8 +180,6 @@ impl<'a> ArgParser<'a> {
         }
     }
 
-    /// The value for `--name`: the inline `=value` if given, otherwise the
-    /// next argument, which this consumes.
     fn next_value(&mut self, name: &str, inline: Option<&str>) -> Result<String, String> {
         if let Some(v) = inline {
             return Ok(v.to_string());
@@ -200,7 +191,6 @@ impl<'a> ArgParser<'a> {
             .ok_or_else(|| format!("flag needs an argument: --{name}"))
     }
 
-    /// Like [`Self::next_value`], but rejects an empty value.
     fn next_nonempty(&mut self, name: &str, inline: Option<&str>) -> Result<String, String> {
         let v = self.next_value(name, inline)?;
         if v.is_empty() {
@@ -209,8 +199,6 @@ impl<'a> ArgParser<'a> {
         Ok(v)
     }
 
-    /// A token budget. Negatives are recorded rather than rejected here, so
-    /// the error can list all of them together once parsing finishes.
     fn budget(&mut self, name: &str, inline: Option<&str>) -> Result<i64, String> {
         let raw = self.next_value(name, inline)?;
         let n: i64 = raw
@@ -245,8 +233,6 @@ fn parse_flags(args: &[String]) -> Result<ParseOutcome, String> {
         }
 
         let (name, inline) = split_flag(arg);
-        // Budgets share a shape, so they are dispatched by table rather than
-        // by four near-identical arms.
         let budget = match name {
             "max-agents-tokens" => Some(&mut f.max_agents_tokens),
             "max-skill-tokens" => Some(&mut f.max_skill_tokens),
@@ -297,23 +283,15 @@ fn parse_bool_inline(inline: Option<&str>) -> bool {
     }
 }
 
-/// A validated run: command line and config file merged, values checked.
-///
-/// Construction decides *what* to do and rejects bad input; `execute` does it.
-/// Keeping those apart is what stops `run` from being one procedure that mixes
-/// parsing, validation, discovery, linting, reporting and exit codes.
+/// A validated run: construction rejects bad input, `execute` does the work.
 struct Cli {
     settings: Resolved,
 }
 
 impl Cli {
-    /// Merges the config file under the flags and validates the result.
-    ///
-    /// Errors are phrased without naming a flag, since a bad value may have
-    /// come from either source.
+    /// Errors don't name a flag: a bad value may come from the file or the flags.
     fn new(f: Flags, cwd: &Path) -> Result<Self, String> {
-        // Typos in --disable are caught before the config file is read so the
-        // error names the flag the user just typed.
+        // Checked before the config is read so the error names the typed flag.
         check_rule_names(&f.disabled)?;
         let file_cfg = load_config(&f, cwd)?;
         let settings = resolve(f, file_cfg);
@@ -333,7 +311,6 @@ impl Cli {
         Ok(Cli { settings })
     }
 
-    /// The linter configuration this run implies.
     fn lint_config(&self) -> Config {
         let s = &self.settings;
         Config {
@@ -359,7 +336,6 @@ impl Cli {
         }
     }
 
-    /// Discovers, lints and reports. Returns the process exit code.
     fn execute(&self, stdout: &mut impl Write, stderr: &mut impl Write, is_terminal: bool) -> i32 {
         let targets = match discover::find(&self.settings.paths, &self.settings.excludes) {
             Ok(t) => t,
@@ -371,11 +347,7 @@ impl Cli {
 
         let linter = lint::Linter::new(self.lint_config());
         let mut results = Vec::with_capacity(targets.len());
-        // A file that cannot be read is reported and skipped rather than
-        // ending the run: discovery and linting are separate passes, so a file
-        // can vanish or turn out to be a dangling symlink in between, and
-        // throwing away every result already computed helps nobody. It is
-        // still a failure, so the run cannot exit 0.
+        // A file can vanish between discovery and linting: skip it, but still fail.
         let mut unreadable = 0usize;
         for t in &targets {
             match linter.file(t) {
@@ -387,15 +359,11 @@ impl Cli {
             }
         }
 
-        // Summarized once and handed to the reporter, rather than each reporter
-        // recomputing it and the exit code recomputing it again.
         let summary = report::summarize(&results);
         let write_result = self
             .reporter(is_terminal)
             .render(stdout, &results, &summary);
-        // A closed pipe is how `lintmatter . | head` ends, not a failure: report
-        // whatever the findings warrant and stay quiet, rather than exiting
-        // like a bad flag. Every other write failure is still worth reporting.
+        // A closed pipe is how `lintmatter . | head` ends, not a failure.
         if let Err(e) = write_result
             && e.kind() != std::io::ErrorKind::BrokenPipe
         {
@@ -425,9 +393,7 @@ pub fn run(
 ) -> i32 {
     let f = match parse_args(args) {
         ParseOutcome::Flags(f) => f,
-        // Usage the user asked for goes to stdout, so `lintmatter --help | less`
-        // works. Usage printed alongside a flag error stays on stderr, with
-        // the error.
+        // Requested usage goes to stdout so `--help | less` works.
         ParseOutcome::Help => {
             print_usage(stdout);
             return EXIT_OK;
@@ -439,7 +405,6 @@ pub fn run(
         }
     };
 
-    // Answered without reading a config file or touching the filesystem.
     if f.show_version {
         let _ = writeln!(stdout, "lintmatter {VERSION}");
         return EXIT_OK;

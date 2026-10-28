@@ -1,9 +1,4 @@
-//! End-to-end tests: they drive the whole CLI in-process through `cli::run`,
-//! over the fixtures in `testdata/`.
-//!
-//! They live here rather than inside `src/cli.rs` because that is what they
-//! are -- integration tests -- and because keeping them out leaves that module
-//! readable.
+//! End-to-end tests driving `cli::run` in-process over `testdata/`.
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -74,9 +69,6 @@ fn broken_pipe_is_not_a_usage_error() {
     assert!(stderr.contains("lintmatter:"), "stderr={stderr}");
 }
 
-/// Runs the CLI with config discovery off, so these cases keep testing
-/// flags and defaults no matter what .lintmatter.yaml happens to sit above
-/// the directory the tests run in.
 /// The files lintmatter reported a finding under. Every file gets a header
 /// line carrying its score now, so a path appearing in the output is no
 /// longer proof that a rule fired on it -- only an indented line below the
@@ -96,6 +88,8 @@ fn files_with_findings(stdout: &str) -> Vec<&str> {
     out
 }
 
+/// Runs the CLI with config discovery off, so a stray .lintmatter.yaml above
+/// the test directory cannot change the result.
 fn run_args(args: &[&str]) -> (i32, String, String) {
     let mut with_flag = vec!["--no-config"];
     with_flag.extend_from_slice(args);
@@ -527,8 +521,7 @@ fn config_usage_errors() {
     }
 }
 
-/// A file can be discovered and then fail to open: it vanished in between, or
-/// it is a dangling symlink, which the walk adds without following.
+/// A dangling symlink is discovered but cannot be opened.
 #[cfg(unix)]
 #[test]
 fn an_unreadable_file_is_reported_but_does_not_abort_the_run() {
@@ -540,11 +533,8 @@ fn an_unreadable_file_is_reported_but_does_not_abort_the_run() {
 
     let (code, stdout, stderr) = run_args(&[&dir.path().to_string_lossy()]);
 
-    // The bad file is named on stderr...
     assert!(stderr.contains("cannot read"), "{stderr}");
-    // ...the good one is still checked, rather than discarded with the run...
     assert!(stdout.contains("1 file checked"), "{stdout}");
-    // ...and the run fails, but as findings rather than as bad usage.
     assert_eq!(code, EXIT_FINDINGS, "stdout={stdout} stderr={stderr}");
 }
 
@@ -575,8 +565,7 @@ fn help_goes_to_stdout_and_exits_zero() {
         assert!(stderr.is_empty(), "{flag}: {stderr}");
     }
 
-    // Usage printed because a flag was wrong is diagnostic output, so it
-    // stays on stderr alongside the error and leaves stdout clean.
+    // Usage after a flag error stays on stderr.
     let (code, stdout, stderr) = run_args(&["--nope"]);
     assert_eq!(code, EXIT_USAGE);
     assert!(stdout.is_empty(), "{stdout}");

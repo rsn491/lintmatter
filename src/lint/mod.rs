@@ -97,15 +97,11 @@ impl std::fmt::Display for Severity {
 
 /// A single rule violation.
 ///
-/// The file is not stored here: it is always the enclosing [`FileResult`]'s
-/// path, so keeping a copy per finding meant an allocation each. The JSON
-/// report still carries `file` on every finding -- the reporter fills it in
-/// from the result it is already walking.
+/// The file is the enclosing [`FileResult`]'s path; the JSON reporter re-adds it.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct Finding {
     #[serde(skip_serializing_if = "is_zero")]
     pub line: usize,
-    /// Always one of the registry's ids, so it borrows rather than allocates.
     pub rule: &'static str,
     pub severity: Severity,
     pub message: String,
@@ -294,9 +290,6 @@ pub struct Linter {
 }
 
 impl Linter {
-    /// Returns a Linter using the heuristic token estimator, anchored to the
-    /// process's working directory. Override either with [`Self::with_counter`]
-    /// or [`Self::with_cwd`].
     pub fn new(cfg: Config) -> Self {
         let disabled = cfg.disabled.iter().cloned().collect();
         let linter = Linter {
@@ -305,19 +298,15 @@ impl Linter {
             disabled,
             cwd: PathBuf::new(),
         };
-        // Resolved once, here, so that no rule reaches for process state later.
         linter.with_cwd(std::env::current_dir().unwrap_or_default())
     }
 
-    /// Counts tokens with `counter` instead of the heuristic estimator.
     pub fn with_counter(mut self, counter: Box<dyn Counter>) -> Self {
         self.counter = counter;
         self
     }
 
-    /// Treats `cwd` as the working directory, so the one rule that cares can
-    /// be tested without mutating process-global state while other tests run
-    /// alongside it.
+    /// Lets tests set the working directory without mutating process state.
     pub fn with_cwd(mut self, cwd: PathBuf) -> Self {
         self.cwd = cwd;
         self
@@ -950,8 +939,6 @@ mod tests {
         assert_eq!(with_res.tokens.content, bare_res.tokens.content);
     }
 
-    /// Counts every string as a fixed number of tokens, so a test can tell
-    /// which counter a budget was measured with.
     struct FixedCounter(usize);
 
     impl Counter for FixedCounter {
@@ -962,9 +949,6 @@ mod tests {
 
     #[test]
     fn with_counter_substitutes_the_token_counter() {
-        // tokens.rs documents the Counter trait as the seam where a real BPE
-        // tokenizer could replace the heuristic without touching the rules.
-        // Nothing exercised that seam until now.
         let (_base, target) = write_skill("counted", VALID_SKILL);
 
         let mut cfg = generous_config();
@@ -976,7 +960,6 @@ mod tests {
         assert_eq!(res.tokens.content, 11);
         assert!(res.findings.iter().any(|f| f.rule == RULE_TOKENS_CONTENT));
 
-        // Same budget, a counter that reports under it: no finding.
         let res = Linter::new(cfg)
             .with_counter(Box::new(FixedCounter(9)))
             .file(&target)
@@ -1074,9 +1057,6 @@ mod tests {
         );
 
         let res = Linter::new(generous_config()).file(&target).unwrap();
-        // The file is carried once, by the result; findings anchor the line.
-        // That the JSON still repeats `file` on each finding is asserted by
-        // the CLI's json_output test.
         assert_eq!(res.path, target.path);
         for f in &res.findings {
             if f.rule == RULE_NAME_FORMAT {
