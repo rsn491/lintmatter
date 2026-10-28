@@ -1,0 +1,10 @@
+# Report coverage on PRs without gating them: a red status for a small drop
+# would block merges over a number nobody has agreed a target for.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
