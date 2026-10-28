@@ -36,6 +36,9 @@ pub struct Target {
     pub root: PathBuf,
 }
 
+/// Recursion limit, so a pathological layout cannot exhaust the stack.
+const MAX_DEPTH: usize = 64;
+
 /// Never walked: holds dependencies and build output, whose instruction files
 /// are not the user's to fix.
 const SKIP_DIRS: &[&str] = &[
@@ -102,7 +105,7 @@ impl Discoverer {
             let meta =
                 fs::metadata(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
             if meta.is_dir() {
-                self.walk(path, path)?;
+                self.walk(path, path, 0)?;
                 continue;
             }
             // A file named outright has no walk root, so it stands as its own:
@@ -138,7 +141,13 @@ impl Discoverer {
         }
     }
 
-    fn walk(&mut self, root: &Path, dir: &Path) -> Result<(), String> {
+    fn walk(&mut self, root: &Path, dir: &Path, depth: usize) -> Result<(), String> {
+        if depth > MAX_DEPTH {
+            return Err(format!(
+                "{} is more than {MAX_DEPTH} directories deep: refusing to recurse further",
+                dir.display()
+            ));
+        }
         let mut entries: Vec<_> = fs::read_dir(dir)
             .map_err(|e| format!("cannot read {}: {e}", dir.display()))?
             .collect::<Result<_, _>>()
@@ -158,7 +167,7 @@ impl Discoverer {
                 if SKIP_DIRS.contains(&name.as_ref()) || self.excluded(&name, &rel) {
                     continue;
                 }
-                self.walk(root, &path)?;
+                self.walk(root, &path, depth + 1)?;
                 continue;
             }
             let Some(kind) = kind_for(&path) else {
@@ -368,6 +377,24 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.contains("invalid exclude"), "{err}");
+    }
+
+    #[test]
+    fn find_stops_at_the_depth_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let deep: PathBuf = (0..MAX_DEPTH + 5).map(|i| format!("d{i}")).collect();
+        fs::create_dir_all(dir.path().join(&deep)).unwrap();
+        fs::write(dir.path().join(&deep).join("AGENTS.md"), "too deep").unwrap();
+
+        let err = find(&[dir.path().to_string_lossy().to_string()], &[]).unwrap_err();
+        assert!(err.contains("directories deep"), "{err}");
+
+        let ok_dir = tempfile::tempdir().unwrap();
+        let shallow: PathBuf = (0..MAX_DEPTH - 1).map(|i| format!("d{i}")).collect();
+        fs::create_dir_all(ok_dir.path().join(&shallow)).unwrap();
+        fs::write(ok_dir.path().join(&shallow).join("AGENTS.md"), "deep").unwrap();
+        let targets = find(&[ok_dir.path().to_string_lossy().to_string()], &[]).unwrap();
+        assert_eq!(targets.len(), 1);
     }
 
     #[test]
