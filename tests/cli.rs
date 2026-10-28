@@ -88,8 +88,6 @@ fn files_with_findings(stdout: &str) -> Vec<&str> {
     out
 }
 
-/// Runs the CLI with config discovery off, so a stray .lintmatter.yaml above
-/// the test directory cannot change the result.
 fn run_args(args: &[&str]) -> (i32, String, String) {
     let mut with_flag = vec!["--no-config"];
     with_flag.extend_from_slice(args);
@@ -521,7 +519,6 @@ fn config_usage_errors() {
     }
 }
 
-/// A dangling symlink is discovered but cannot be opened.
 #[cfg(unix)]
 #[test]
 fn an_unreadable_file_is_reported_but_does_not_abort_the_run() {
@@ -565,7 +562,6 @@ fn help_goes_to_stdout_and_exits_zero() {
         assert!(stderr.is_empty(), "{flag}: {stderr}");
     }
 
-    // Usage after a flag error stays on stderr.
     let (code, stdout, stderr) = run_args(&["--nope"]);
     assert_eq!(code, EXIT_USAGE);
     assert!(stdout.is_empty(), "{stdout}");

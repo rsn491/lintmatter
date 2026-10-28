@@ -163,11 +163,9 @@ fn split_flag(token: &str) -> (&str, Option<&str>) {
     }
 }
 
-/// Walks the argument list; a flag needing a value consumes the next argument.
 struct ArgParser<'a> {
     args: &'a [String],
     i: usize,
-    /// Collected so the error names every negative budget at once.
     negative: Vec<String>,
 }
 
@@ -283,13 +281,11 @@ fn parse_bool_inline(inline: Option<&str>) -> bool {
     }
 }
 
-/// A validated run: construction rejects bad input, `execute` does the work.
 struct Cli {
     settings: Resolved,
 }
 
 impl Cli {
-    /// Errors don't name a flag: a bad value may come from the file or the flags.
     fn new(f: Flags, cwd: &Path) -> Result<Self, String> {
         // Checked before the config is read so the error names the typed flag.
         check_rule_names(&f.disabled)?;

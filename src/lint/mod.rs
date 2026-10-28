@@ -306,7 +306,6 @@ impl Linter {
         self
     }
 
-    /// Lets tests set the working directory without mutating process state.
     pub fn with_cwd(mut self, cwd: PathBuf) -> Self {
         self.cwd = cwd;
         self

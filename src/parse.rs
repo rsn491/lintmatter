@@ -313,7 +313,6 @@ fn misplaced_frontmatter(lines: &[&str]) -> Option<usize> {
         if !OPEN_FENCE_RE.is_match(fence_line(line)) {
             continue;
         }
-        // An unclosed candidate is skipped; a real block may still follow.
         let Some(close) = lines
             .iter()
             .enumerate()
@@ -497,7 +496,6 @@ mod tests {
         assert_eq!(err.kind, ErrKind::NotFirst);
         assert_eq!(err.line, 7);
 
-        // Not reported: `---` as a thematic break.
         let quiet: &[(&str, &str)] = &[
             ("thematic break", "# Title\n\n---\n\nA new section.\n"),
             (
