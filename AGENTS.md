@@ -95,6 +95,8 @@ comment.
 - A file's score rates only the checks that ran on it. A part with nothing to
   judge drops out of the mean rather than scoring a free 100.
 - Comments explain why a check exists, not what the code does.
+- Fallible functions return a `thiserror` error type owned by their module,
+  never `String`; the message lives in the `#[error]` attribute.
 - Requested usage goes to stdout; diagnostics (including usage after a flag
   error) go to stderr.
 - An unreadable file is reported and skipped, not fatal; discovery errors still

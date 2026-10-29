@@ -12,6 +12,7 @@
 //! the project's baseline without preventing a one-off override on the
 //! command line.
 
+use std::io;
 use std::path::{Path, PathBuf};
 
 use saphyr::{LoadableYamlNode, MarkedYaml, YamlData};
@@ -113,23 +114,77 @@ pub fn discover(start: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Why a config file could not be used.
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("cannot read config {}: {source}", path.display())]
+    Read { path: PathBuf, source: io::Error },
+    #[error("{path}:{line}: {problem}")]
+    Invalid {
+        path: String,
+        line: usize,
+        problem: Problem,
+    },
+}
+
+/// What is wrong at one line of a config file.
+#[derive(Debug, thiserror::Error)]
+pub enum Problem {
+    #[error("invalid YAML: {0}")]
+    Yaml(String),
+    #[error("config must be a mapping of settings to values")]
+    NotMapping,
+    #[error("setting names must be strings")]
+    NonStringKey,
+    #[error("unknown setting {0:?}: want one of {keys}", keys = KNOWN_KEYS.join(", "))]
+    UnknownSetting(String),
+    #[error("rules must be a mapping of rule id to true or false")]
+    RulesNotMapping,
+    #[error("rule ids must be strings")]
+    NonStringRuleId,
+    #[error("unknown rule {0:?}: run --list-rules to see them all")]
+    UnknownRule(String),
+    #[error("{key} must be an integer")]
+    NotInteger { key: String },
+    #[error("invalid value {text:?} for {key}: not an integer")]
+    BadInteger { key: String, text: String },
+    #[error("{key} must be zero or more (0 disables the check)")]
+    Negative { key: String },
+    #[error("{key} must be true or false")]
+    NotBoolean { key: String },
+    #[error("invalid value {text:?} for {key}: want true or false")]
+    BadBoolean { key: String, text: String },
+    #[error("{key} must be a non-empty string")]
+    EmptyString { key: String },
+}
+
+fn invalid(path: &str, line: usize, problem: Problem) -> ConfigError {
+    ConfigError::Invalid {
+        path: path.to_string(),
+        line,
+        problem,
+    }
+}
+
 /// Reads and parses a config file.
-pub fn load(path: &Path) -> Result<Settings, String> {
+pub fn load(path: &Path) -> Result<Settings, ConfigError> {
     let display = path.to_string_lossy().replace('\\', "/");
-    let src = std::fs::read_to_string(path)
-        .map_err(|e| format!("cannot read config {}: {e}", path.display()))?;
+    let src = std::fs::read_to_string(path).map_err(|source| ConfigError::Read {
+        path: path.to_path_buf(),
+        source,
+    })?;
     parse(&src, &display)
 }
 
 /// Parses config text. `path` only labels the error messages.
-pub fn parse(src: &str, path: &str) -> Result<Settings, String> {
+pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
     let mut cfg = Settings::default();
 
     let docs = MarkedYaml::load_from_str(src).map_err(|e| {
-        format!(
-            "{path}:{}: invalid YAML: {}",
+        invalid(
+            path,
             e.marker().line(),
-            e.info().trim()
+            Problem::Yaml(e.info().trim().to_string()),
         )
     })?;
     // A file that is empty or holds only comments parses to no document, and
@@ -141,16 +196,13 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, String> {
         return Ok(cfg);
     }
     let YamlData::Mapping(map) = &root.data else {
-        return Err(format!(
-            "{path}:{}: config must be a mapping of settings to values",
-            root.span.start.line()
-        ));
+        return Err(invalid(path, root.span.start.line(), Problem::NotMapping));
     };
 
     for (key, value) in map.iter() {
         let line = key.span.start.line();
         let Some(name) = scalar_string(&key.data) else {
-            return Err(format!("{path}:{line}: setting names must be strings"));
+            return Err(invalid(path, line, Problem::NonStringKey));
         };
         match name.as_str() {
             "max-agents-tokens" => cfg.max_agents_tokens = Some(budget(path, &name, value)?),
@@ -163,12 +215,7 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, String> {
             }
             "exclude" => cfg.excludes = string_list(path, &name, value)?,
             "rules" => cfg.disabled = rules(path, value)?,
-            _ => {
-                return Err(format!(
-                    "{path}:{line}: unknown setting {name:?}: want one of {}",
-                    KNOWN_KEYS.join(", ")
-                ));
-            }
+            _ => return Err(invalid(path, line, Problem::UnknownSetting(name))),
         }
     }
 
@@ -178,11 +225,12 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, String> {
 /// Reads `rules:`, a mapping of rule id to whether it runs. Only the ids
 /// switched off are returned; naming a rule that lintmatter does not have is an
 /// error rather than a silent no-op, the same way `--disable` rejects typos.
-fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, String> {
-    let line = node.span.start.line();
+fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, ConfigError> {
     let YamlData::Mapping(map) = &node.data else {
-        return Err(format!(
-            "{path}:{line}: rules must be a mapping of rule id to true or false"
+        return Err(invalid(
+            path,
+            node.span.start.line(),
+            Problem::RulesNotMapping,
         ));
     };
 
@@ -190,12 +238,10 @@ fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, String> {
     for (key, value) in map.iter() {
         let key_line = key.span.start.line();
         let Some(rule) = scalar_string(&key.data) else {
-            return Err(format!("{path}:{key_line}: rule ids must be strings"));
+            return Err(invalid(path, key_line, Problem::NonStringRuleId));
         };
         if !RULES.contains(&rule.as_str()) {
-            return Err(format!(
-                "{path}:{key_line}: unknown rule {rule:?}: run --list-rules to see them all"
-            ));
+            return Err(invalid(path, key_line, Problem::UnknownRule(rule)));
         }
         if !boolean(path, &format!("rules.{rule}"), value)? {
             disabled.push(rule);
@@ -206,17 +252,17 @@ fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, String> {
 
 /// Reads a token budget. Zero disables the check it belongs to, matching the
 /// flags.
-fn budget(path: &str, key: &str, node: &MarkedYaml) -> Result<i64, String> {
+fn budget(path: &str, key: &str, node: &MarkedYaml) -> Result<i64, ConfigError> {
     let line = node.span.start.line();
-    let text = scalar_string(&node.data)
-        .ok_or_else(|| format!("{path}:{line}: {key} must be an integer"))?;
-    let n: i64 = text
-        .parse()
-        .map_err(|_| format!("{path}:{line}: invalid value {text:?} for {key}: not an integer"))?;
+    let key = key.to_string();
+    let Some(text) = scalar_string(&node.data) else {
+        return Err(invalid(path, line, Problem::NotInteger { key }));
+    };
+    let Ok(n) = text.parse::<i64>() else {
+        return Err(invalid(path, line, Problem::BadInteger { key, text }));
+    };
     if n < 0 {
-        return Err(format!(
-            "{path}:{line}: {key} must be zero or more (0 disables the check)"
-        ));
+        return Err(invalid(path, line, Problem::Negative { key }));
     }
     Ok(n)
 }
@@ -224,30 +270,35 @@ fn budget(path: &str, key: &str, node: &MarkedYaml) -> Result<i64, String> {
 /// Reads a boolean. YAML 1.2 only spells these `true` and `false`, but config
 /// files are hand-written, so the usual `yes`/`no` and `on`/`off` spellings
 /// are accepted rather than reported as a type error.
-fn boolean(path: &str, key: &str, node: &MarkedYaml) -> Result<bool, String> {
+fn boolean(path: &str, key: &str, node: &MarkedYaml) -> Result<bool, ConfigError> {
     let line = node.span.start.line();
-    let text = scalar_string(&node.data)
-        .ok_or_else(|| format!("{path}:{line}: {key} must be true or false"))?;
+    let key = key.to_string();
+    let Some(text) = scalar_string(&node.data) else {
+        return Err(invalid(path, line, Problem::NotBoolean { key }));
+    };
     match text.to_ascii_lowercase().as_str() {
         "true" | "yes" | "on" => Ok(true),
         "false" | "no" | "off" => Ok(false),
-        _ => Err(format!(
-            "{path}:{line}: invalid value {text:?} for {key}: want true or false"
-        )),
+        _ => Err(invalid(path, line, Problem::BadBoolean { key, text })),
     }
 }
 
-fn string(path: &str, key: &str, node: &MarkedYaml) -> Result<String, String> {
-    let line = node.span.start.line();
+fn string(path: &str, key: &str, node: &MarkedYaml) -> Result<String, ConfigError> {
     match scalar_string(&node.data) {
         Some(s) if !s.is_empty() => Ok(s),
-        _ => Err(format!("{path}:{line}: {key} must be a non-empty string")),
+        _ => Err(invalid(
+            path,
+            node.span.start.line(),
+            Problem::EmptyString {
+                key: key.to_string(),
+            },
+        )),
     }
 }
 
 /// Reads a list of strings, accepting a lone scalar as a one-element list so
 /// `exclude: testdata` works as well as the sequence form.
-fn string_list(path: &str, key: &str, node: &MarkedYaml) -> Result<Vec<String>, String> {
+fn string_list(path: &str, key: &str, node: &MarkedYaml) -> Result<Vec<String>, ConfigError> {
     match &node.data {
         YamlData::Sequence(items) => items.iter().map(|item| string(path, key, item)).collect(),
         _ => Ok(vec![string(path, key, node)?]),
@@ -264,7 +315,7 @@ mod tests {
     use std::fs;
 
     fn parse_str(src: &str) -> Result<Settings, String> {
-        parse(src, ".lintmatter.yaml")
+        parse(src, ".lintmatter.yaml").map_err(|e| e.to_string())
     }
 
     #[test]
@@ -389,12 +440,12 @@ rules:
         let got = load(&path).unwrap();
         assert_eq!(got.max_skill_tokens, Some(42));
 
-        let err = load(&dir.path().join("nope.yaml")).unwrap_err();
+        let err = load(&dir.path().join("nope.yaml")).unwrap_err().to_string();
         assert!(err.contains("cannot read config"), "{err}");
 
         // Errors name the file they came from.
         fs::write(&path, "max-skill-tokens: nope\n").unwrap();
-        let err = load(&path).unwrap_err();
+        let err = load(&path).unwrap_err().to_string();
         assert!(err.contains(".lintmatter.yaml:1:"), "{err}");
     }
 
