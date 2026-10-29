@@ -317,7 +317,7 @@ fn color_flag_controls_decoration() {
 
     let (code, stdout, stderr) = run_args(&["--color", "rainbow", &skill]);
     assert_eq!(code, EXIT_USAGE, "stdout={stdout} stderr={stderr}");
-    assert!(stderr.contains("unknown color"), "{stderr}");
+    assert!(stderr.contains("invalid value"), "{stderr}");
 }
 
 #[test]
@@ -341,7 +341,7 @@ fn exclude_prunes_paths() {
 fn usage_errors() {
     let clean = fixture(&["clean"]);
     let cases: &[(&str, Vec<&str>, &str)] = &[
-        ("unknown format", vec!["--format", "xml"], "unknown format"),
+        ("unknown format", vec!["--format", "xml"], "invalid value"),
         (
             "unknown rule",
             vec!["--disable", "no.such.rule"],
@@ -377,7 +377,7 @@ fn usage_errors() {
 
     let (code, stdout, stderr) = run_args(&["--nope"]);
     assert_eq!(code, EXIT_USAGE, "stdout={stdout} stderr={stderr}");
-    assert!(stderr.contains("flag provided but not defined"), "{stderr}");
+    assert!(stderr.contains("unexpected argument"), "{stderr}");
 }
 
 #[test]
@@ -501,12 +501,12 @@ fn config_usage_errors() {
         (
             "config and no-config",
             vec!["--config", &bad, "--no-config"],
-            "cannot be used together",
+            "cannot be used with",
         ),
         (
             "empty config path",
             vec!["--config", ""],
-            "must not be empty",
+            "a value is required",
         ),
     ];
     for (name, extra, want) in cases {
@@ -539,7 +539,10 @@ fn an_unreadable_file_is_reported_but_does_not_abort_the_run() {
 fn version_and_list_rules() {
     let (code, stdout, _) = run_args(&["--version"]);
     assert_eq!(code, EXIT_OK);
-    assert!(stdout.starts_with("lintmatter "), "{stdout}");
+    assert_eq!(
+        stdout,
+        format!("lintmatter {}\n", env!("CARGO_PKG_VERSION"))
+    );
 
     let (code, stdout, _) = run_args(&["--list-rules"]);
     assert_eq!(code, EXIT_OK);
@@ -566,8 +569,7 @@ fn help_goes_to_stdout_and_exits_zero() {
     assert_eq!(code, EXIT_USAGE);
     assert!(stdout.is_empty(), "{stdout}");
     assert!(
-        stderr.contains("flag provided but not defined")
-            && stderr.contains("lintmatter lints agent instruction files"),
+        stderr.contains("unexpected argument") && stderr.contains("Usage:"),
         "{stderr}"
     );
 }
