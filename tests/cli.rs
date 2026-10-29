@@ -115,13 +115,13 @@ fn broken_tree_exits_one() {
     let (code, stdout, _) = run_args(&[&fixture(&["broken"])]);
     assert_eq!(code, EXIT_FINDINGS);
     for want in [
-        lint::RULE_FRONTMATTER_MISSING,
-        lint::RULE_FRONTMATTER_UNTERMINATED,
-        lint::RULE_NAME_FORMAT,
-        lint::RULE_NAME_DIR_MISMATCH,
-        lint::RULE_FRONTMATTER_UNKNOWN_KEY,
-        lint::RULE_DESCRIPTION_LENGTH,
-        lint::RULE_TOKENS_DESCRIPTION,
+        "frontmatter.missing",
+        "frontmatter.unterminated",
+        "name.format",
+        "name.dir-mismatch",
+        "frontmatter.unknown-key",
+        "description.length",
+        "tokens.description",
     ] {
         assert!(stdout.contains(want), "stdout missing {want}:\n{stdout}");
     }
@@ -140,7 +140,7 @@ fn text_output_format() {
         if line.contains("SKILL.md") && !line.starts_with("  ") {
             header = line;
         }
-        if line.contains(lint::RULE_NAME_FORMAT) {
+        if line.contains("name.format") {
             name_format = line;
         }
     }
@@ -151,7 +151,7 @@ fn text_output_format() {
     assert_eq!(parts.len(), 4, "{name_format}");
     assert_eq!(parts[0], "2");
     assert_eq!(parts[1], "error");
-    assert_eq!(parts[2], lint::RULE_NAME_FORMAT);
+    assert_eq!(parts[2], "name.format");
 }
 
 #[test]
@@ -253,7 +253,7 @@ fn name_and_description_budget_flags() {
         &skill,
     ]);
     assert_eq!(code, EXIT_FINDINGS);
-    assert!(stdout.contains(lint::RULE_TOKENS_NAME));
+    assert!(stdout.contains("tokens.name"));
 
     let (code, stdout, _) = run_args(&[
         "--max-skill-tokens",
@@ -263,7 +263,7 @@ fn name_and_description_budget_flags() {
         &skill,
     ]);
     assert_eq!(code, EXIT_FINDINGS);
-    assert!(stdout.contains(lint::RULE_TOKENS_DESCRIPTION));
+    assert!(stdout.contains("tokens.description"));
 
     let (code, ..) = run_args(&[&skill]);
     assert_eq!(code, EXIT_OK);
@@ -273,11 +273,11 @@ fn name_and_description_budget_flags() {
 fn warnings_alone_exit_zero() {
     let skill = fixture(&["broken", "bad-name", "SKILL.md"]);
 
-    let (code, stdout, _) = run_args(&["--disable", lint::RULE_NAME_FORMAT, &skill]);
+    let (code, stdout, _) = run_args(&["--disable", "name.format", &skill]);
     assert_eq!(code, EXIT_OK, "{stdout}");
-    assert!(stdout.contains(lint::RULE_NAME_DIR_MISMATCH));
+    assert!(stdout.contains("name.dir-mismatch"));
 
-    let (code, ..) = run_args(&["--strict", "--disable", lint::RULE_NAME_FORMAT, &skill]);
+    let (code, ..) = run_args(&["--strict", "--disable", "name.format", &skill]);
     assert_eq!(code, EXIT_FINDINGS);
 }
 
@@ -286,12 +286,12 @@ fn quiet_suppresses_warnings() {
     let skill = fixture(&["broken", "bad-name", "SKILL.md"]);
 
     let (_, stdout, _) = run_args(&["--quiet", &skill]);
-    assert!(!stdout.contains(lint::RULE_NAME_DIR_MISMATCH));
-    assert!(stdout.contains(lint::RULE_NAME_FORMAT));
+    assert!(!stdout.contains("name.dir-mismatch"));
+    assert!(stdout.contains("name.format"));
     assert!(stdout.contains("warning"));
 
     let (_, stdout, _) = run_args(&["--quiet", "--format", "json", &skill]);
-    assert!(!stdout.contains(lint::RULE_NAME_DIR_MISMATCH));
+    assert!(!stdout.contains("name.dir-mismatch"));
     let got: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert!(got["summary"]["files_with_warnings"].as_u64().unwrap() > 0);
 }
@@ -403,8 +403,8 @@ fn config_file_disables_rules() {
 
     let (code, stdout, _) = run_raw(&["--config", &cfg, &skill]);
     assert_eq!(code, EXIT_OK, "{stdout}");
-    assert!(!stdout.contains(lint::RULE_NAME_FORMAT), "{stdout}");
-    assert!(!stdout.contains(lint::RULE_NAME_DIR_MISMATCH), "{stdout}");
+    assert!(!stdout.contains("name.format"), "{stdout}");
+    assert!(!stdout.contains("name.dir-mismatch"), "{stdout}");
 }
 
 #[test]

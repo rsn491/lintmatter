@@ -1,18 +1,20 @@
 //! Rules over a skill's `description`.
 
-use crate::lint::rule::Rule;
+use crate::lint::rule::{Part, Rule, RuleMeta, SKILL_ONLY};
 use crate::lint::rules::humanize;
-use crate::lint::{
-    FileContext, FindingSink, MAX_DESCRIPTION_CHARS, RULE_DESCRIPTION_LENGTH,
-    RULE_DESCRIPTION_REQUIRED,
-};
+use crate::lint::{FileContext, FindingSink};
+
+/// The skill spec's limit on a description, in characters.
+pub const MAX_DESCRIPTION_CHARS: usize = 1024;
 
 pub struct Required;
 
 impl Rule for Required {
-    fn id(&self) -> &'static str {
-        RULE_DESCRIPTION_REQUIRED
-    }
+    const META: RuleMeta = RuleMeta {
+        id: "description.required",
+        part: Part::Frontmatter,
+        kinds: SKILL_ONLY,
+    };
 
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
         let Some(fm) = ctx.frontmatter() else { return };
@@ -29,9 +31,11 @@ impl Rule for Required {
 pub struct Length;
 
 impl Rule for Length {
-    fn id(&self) -> &'static str {
-        RULE_DESCRIPTION_LENGTH
-    }
+    const META: RuleMeta = RuleMeta {
+        id: "description.length",
+        part: Part::Frontmatter,
+        kinds: SKILL_ONLY,
+    };
 
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
         let (Some(fm), Some(desc)) = (ctx.frontmatter(), ctx.description()) else {
@@ -49,5 +53,36 @@ impl Rule for Length {
                 ),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lint::testing::*;
+
+    #[test]
+    fn description_rules() {
+        let long_desc = "x".repeat(MAX_DESCRIPTION_CHARS + 1);
+        assert_skill_cases(vec![
+            (
+                "description missing",
+                "no-description",
+                "---\nname: no-description\n---\nBody.\n".to_string(),
+                vec!["description.required"],
+            ),
+            (
+                "description empty",
+                "blank-description",
+                "---\nname: blank-description\ndescription: \"   \"\n---\nBody.\n".to_string(),
+                vec!["description.required"],
+            ),
+            (
+                "description too long",
+                "verbose",
+                format!("---\nname: verbose\ndescription: {long_desc}\n---\nBody.\n"),
+                vec!["description.length"],
+            ),
+        ]);
     }
 }

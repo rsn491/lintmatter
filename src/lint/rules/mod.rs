@@ -1,9 +1,10 @@
 //! The rule registry.
 //!
 //! `ALL`'s order is the one place report order is written down. It backs
-//! `--list-rules`, `--disable` validation, and the order findings appear in a
-//! report, so adding a rule means adding its struct here at the position it
-//! should be reported -- there is no second list to keep in step.
+//! `--list-rules`, `--disable` validation, the config file's `rules:` mapping,
+//! and the order findings appear in a report, so adding a rule means adding
+//! its struct here at the position it should be reported -- there is no
+//! second list to keep in step.
 
 pub mod description;
 pub mod frontmatter;
@@ -12,10 +13,10 @@ pub mod references;
 pub mod schema;
 pub mod tokens;
 
-use super::rule::Rule;
+use super::rule::DynRule;
 
 /// Renders n with thousands separators, so "6,142 tokens" reads at a glance
-/// in reports.
+/// in a finding's message.
 pub(crate) fn humanize(n: i64) -> String {
     let s = n.to_string();
     if n < 0 {
@@ -34,7 +35,7 @@ pub(crate) fn humanize(n: i64) -> String {
 }
 
 /// Every rule, in report order.
-static ALL: &[&dyn Rule] = &[
+static ALL: &[&dyn DynRule] = &[
     &frontmatter::Missing,
     &frontmatter::NotFirst,
     &frontmatter::Unterminated,
@@ -55,7 +56,7 @@ static ALL: &[&dyn Rule] = &[
 ];
 
 /// Every rule, in report order.
-pub fn all() -> &'static [&'static dyn Rule] {
+pub fn all() -> &'static [&'static dyn DynRule] {
     ALL
 }
 
@@ -84,7 +85,7 @@ mod tests {
     fn ids_are_unique_and_well_formed() {
         let mut seen = HashSet::new();
         for rule in all() {
-            let id = rule.id();
+            let id = rule.meta().id;
             assert!(!id.is_empty(), "a rule has an empty id");
             assert!(seen.insert(id), "duplicate rule id {id:?}");
             assert!(
@@ -97,12 +98,11 @@ mod tests {
 
     #[test]
     fn every_rule_applies_to_at_least_one_kind() {
-        use crate::model::Kind;
         for rule in all() {
             assert!(
-                rule.applies_to(Kind::Skill) || rule.applies_to(Kind::Agents),
+                !rule.meta().kinds.is_empty(),
                 "rule {:?} applies to nothing",
-                rule.id()
+                rule.meta().id
             );
         }
     }

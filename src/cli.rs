@@ -4,10 +4,11 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::config::{
-    self, Config, DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
+    self, DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
     DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
 };
 use crate::lint;
+use crate::model::{Budgets, FileResult, Severity};
 use crate::report;
 use crate::source::discover;
 
@@ -283,6 +284,7 @@ fn parse_bool_inline(inline: Option<&str>) -> bool {
 
 struct Cli {
     settings: Resolved,
+    cwd: PathBuf,
 }
 
 impl Cli {
@@ -304,18 +306,22 @@ impl Cli {
                 settings.color
             ));
         }
-        Ok(Cli { settings })
+        Ok(Cli {
+            settings,
+            cwd: cwd.to_path_buf(),
+        })
     }
 
-    fn lint_config(&self) -> Config {
+    fn lint_options(&self) -> lint::LintOptions {
         let s = &self.settings;
-        Config {
-            max_agents_tokens: s.max_agents_tokens,
-            max_skill_tokens: s.max_skill_tokens,
-            max_skill_name_tokens: s.max_skill_name_tokens,
-            max_skill_description_tokens: s.max_skill_description_tokens,
+        lint::LintOptions {
+            budgets: Budgets {
+                agents: s.max_agents_tokens,
+                skill: s.max_skill_tokens,
+                skill_name: s.max_skill_name_tokens,
+                skill_description: s.max_skill_description_tokens,
+            },
             disabled: s.disabled.clone(),
-            strict: s.strict,
         }
     }
 
@@ -341,7 +347,7 @@ impl Cli {
             }
         };
 
-        let linter = lint::Linter::new(self.lint_config());
+        let linter = lint::Linter::new(self.lint_options(), self.cwd.clone());
         let mut results = Vec::with_capacity(targets.len());
         // A file can vanish between discovery and linting: skip it, but still fail.
         let mut unreadable = 0usize;
@@ -355,6 +361,9 @@ impl Cli {
             }
         }
 
+        if self.settings.strict {
+            promote_warnings(&mut results);
+        }
         let summary = report::summarize(&results);
         let write_result = self
             .reporter(is_terminal)
@@ -439,6 +448,14 @@ fn resolve_color(choice: &str, is_terminal: bool) -> bool {
         return true;
     }
     is_terminal
+}
+
+/// Applies `--strict`: every warning becomes an error, and so fails the run.
+/// The score is untouched, since it rates which rules fired, not how severely.
+fn promote_warnings(results: &mut [FileResult]) {
+    for f in results.iter_mut().flat_map(|r| r.findings.iter_mut()) {
+        f.severity = Severity::Error;
+    }
 }
 
 /// Rejects typos in `--disable` rather than silently doing nothing.

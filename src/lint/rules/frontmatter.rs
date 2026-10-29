@@ -4,12 +4,8 @@
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-use crate::lint::rule::Rule;
-use crate::lint::{
-    FileContext, FindingSink, RULE_FRONTMATTER_INVALID, RULE_FRONTMATTER_MISSING,
-    RULE_FRONTMATTER_NOT_FIRST, RULE_FRONTMATTER_UNKNOWN_KEY, RULE_FRONTMATTER_UNTERMINATED,
-};
-use crate::model::Kind;
+use crate::lint::rule::{ALL_KINDS, Part, Rule, RuleMeta, SKILL_ONLY};
+use crate::lint::{FileContext, FindingSink};
 use crate::source::parse::ErrKind;
 
 /// The front-matter keys the skill spec defines, plus the Claude Code
@@ -33,9 +29,11 @@ static KNOWN_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
 pub struct Missing;
 
 impl Rule for Missing {
-    fn id(&self) -> &'static str {
-        RULE_FRONTMATTER_MISSING
-    }
+    const META: RuleMeta = RuleMeta {
+        id: "frontmatter.missing",
+        part: Part::Frontmatter,
+        kinds: SKILL_ONLY,
+    };
 
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
         if ctx.doc.error.is_some() {
@@ -55,9 +53,11 @@ impl Rule for Missing {
 pub struct NotFirst;
 
 impl Rule for NotFirst {
-    fn id(&self) -> &'static str {
-        RULE_FRONTMATTER_NOT_FIRST
-    }
+    const META: RuleMeta = RuleMeta {
+        id: "frontmatter.not-first",
+        part: Part::Frontmatter,
+        kinds: SKILL_ONLY,
+    };
 
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
         if let Some(e) = ctx.error_of(ErrKind::NotFirst) {
@@ -71,13 +71,11 @@ impl Rule for NotFirst {
 pub struct Unterminated;
 
 impl Rule for Unterminated {
-    fn id(&self) -> &'static str {
-        RULE_FRONTMATTER_UNTERMINATED
-    }
-
-    fn applies_to(&self, _kind: Kind) -> bool {
-        true
-    }
+    const META: RuleMeta = RuleMeta {
+        id: "frontmatter.unterminated",
+        part: Part::Frontmatter,
+        kinds: ALL_KINDS,
+    };
 
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
         if let Some(e) = ctx.error_of(ErrKind::Unterminated) {
@@ -89,9 +87,11 @@ impl Rule for Unterminated {
 pub struct Invalid;
 
 impl Rule for Invalid {
-    fn id(&self) -> &'static str {
-        RULE_FRONTMATTER_INVALID
-    }
+    const META: RuleMeta = RuleMeta {
+        id: "frontmatter.invalid",
+        part: Part::Frontmatter,
+        kinds: SKILL_ONLY,
+    };
 
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
         let Some(e) = &ctx.doc.error else { return };
@@ -105,9 +105,11 @@ impl Rule for Invalid {
 pub struct UnknownKey;
 
 impl Rule for UnknownKey {
-    fn id(&self) -> &'static str {
-        RULE_FRONTMATTER_UNKNOWN_KEY
-    }
+    const META: RuleMeta = RuleMeta {
+        id: "frontmatter.unknown-key",
+        part: Part::Frontmatter,
+        kinds: SKILL_ONLY,
+    };
 
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
         let Some(fm) = ctx.frontmatter() else { return };
@@ -117,5 +119,63 @@ impl Rule for UnknownKey {
                 sink.warn(fm.line(key), format!("unknown front-matter key {key:?}"));
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::lint::testing::*;
+
+    #[test]
+    fn frontmatter_rules() {
+        assert_skill_cases(vec![
+            (
+                "missing front matter",
+                "no-frontmatter",
+                "# A skill with no front matter\n\nBody.\n".to_string(),
+                vec!["frontmatter.missing"],
+            ),
+            (
+                "front matter not first",
+                "late-frontmatter",
+                "\n---\nname: late-frontmatter\ndescription: Late.\n---\n".to_string(),
+                vec!["frontmatter.not-first"],
+            ),
+            (
+                "unterminated front matter",
+                "unterminated",
+                "---\nname: unterminated\ndescription: No closing fence.\n".to_string(),
+                vec!["frontmatter.unterminated"],
+            ),
+            (
+                "invalid yaml",
+                "bad-yaml",
+                "---\nname: bad-yaml\n  description: wrong indent\n---\nBody.\n".to_string(),
+                vec!["frontmatter.invalid"],
+            ),
+            (
+                "front matter is a sequence",
+                "sequence",
+                "---\n- name: sequence\n---\nBody.\n".to_string(),
+                vec!["frontmatter.invalid"],
+            ),
+            (
+                "unknown key",
+                "extra-keys",
+                "---\nname: extra-keys\ndescription: A skill with a stray key.\nauthor: someone\n---\nBody.\n"
+                    .to_string(),
+                vec!["frontmatter.unknown-key"],
+            ),
+        ]);
+    }
+
+    #[test]
+    fn agents_unterminated_frontmatter_is_reported() {
+        let base = tempfile::tempdir().unwrap();
+        let src = "---\ntitle: Project instructions\n\n# Instructions never closed\n";
+        let target = agents_target(base.path(), src);
+
+        let res = lint(generous(), &target);
+        assert_eq!(rule_ids(&res.findings), vec!["frontmatter.unterminated"]);
     }
 }
