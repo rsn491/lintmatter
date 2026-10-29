@@ -1,283 +1,18 @@
-//! Applies lintmatter's rules to agent instruction files.
-
-pub mod rule;
-pub mod rules;
+//! Runs every registered rule over a file.
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
+use std::path::PathBuf;
 
 use crate::config::Config;
 use crate::discover::{Kind, Target};
-use crate::parse::{self, Document, ErrKind, Frontmatter};
+use crate::parse::Document;
 use crate::tokens::{self, Counter};
-use crate::utils::clean_path;
 
-// Rule ids. Listed here so callers -- and `--disable` -- can name a rule
-// without knowing which module implements it; each rule module imports the one
-// it answers to. Report order is NOT set here: that lives solely in the
-// registry, `rules::all`.
-pub const RULE_FRONTMATTER_MISSING: &str = "frontmatter.missing";
-pub const RULE_FRONTMATTER_NOT_FIRST: &str = "frontmatter.not-first";
-pub const RULE_FRONTMATTER_UNTERMINATED: &str = "frontmatter.unterminated";
-pub const RULE_FRONTMATTER_INVALID: &str = "frontmatter.invalid";
-pub const RULE_FRONTMATTER_UNKNOWN_KEY: &str = "frontmatter.unknown-key";
-pub const RULE_NAME_REQUIRED: &str = "name.required";
-pub const RULE_NAME_FORMAT: &str = "name.format";
-pub const RULE_NAME_LENGTH: &str = "name.length";
-pub const RULE_NAME_DIR_MISMATCH: &str = "name.dir-mismatch";
-pub const RULE_DESCRIPTION_REQUIRED: &str = "description.required";
-pub const RULE_DESCRIPTION_LENGTH: &str = "description.length";
-pub const RULE_ALLOWED_TOOLS_TYPE: &str = "allowed-tools.type";
-pub const RULE_METADATA_TYPE: &str = "metadata.type";
-pub const RULE_TOKENS_CONTENT: &str = "tokens.content";
-pub const RULE_TOKENS_NAME: &str = "tokens.name";
-pub const RULE_TOKENS_DESCRIPTION: &str = "tokens.description";
-pub const RULE_FILE_REFERENCE_MISSING: &str = "file-reference.missing";
-
-/// Limits from the Anthropic skill spec, in characters.
-pub const MAX_NAME_CHARS: usize = 64;
-pub const MAX_DESCRIPTION_CHARS: usize = 1024;
-
-/// Every rule id lintmatter can emit, in report order. Derived from the registry,
-/// so it cannot drift from the rules that actually run.
-pub static RULES: LazyLock<Vec<&'static str>> =
-    LazyLock::new(|| rules::all().iter().map(|r| r.id()).collect());
-
-/// The part of a file's score a rule's outcome feeds. Every id in [`RULES`]
-/// maps to one, enforced by a test, so a new rule cannot be added without
-/// deciding what it rates. Named `Part` rather than the more natural
-/// `Component` because `std::path::Component` already holds that name here.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Part {
-    Frontmatter,
-    Tokens,
-    FileReferences,
-}
-
-/// Spelled out per rule rather than falling back to a catch-all arm: the
-/// fallback is what would let a new rule slip into the wrong component.
-fn part(rule: &str) -> Option<Part> {
-    match rule {
-        RULE_FRONTMATTER_MISSING
-        | RULE_FRONTMATTER_NOT_FIRST
-        | RULE_FRONTMATTER_UNTERMINATED
-        | RULE_FRONTMATTER_INVALID
-        | RULE_FRONTMATTER_UNKNOWN_KEY
-        | RULE_NAME_REQUIRED
-        | RULE_NAME_FORMAT
-        | RULE_NAME_LENGTH
-        | RULE_NAME_DIR_MISMATCH
-        | RULE_DESCRIPTION_REQUIRED
-        | RULE_DESCRIPTION_LENGTH
-        | RULE_ALLOWED_TOOLS_TYPE
-        | RULE_METADATA_TYPE => Some(Part::Frontmatter),
-        RULE_TOKENS_CONTENT | RULE_TOKENS_NAME | RULE_TOKENS_DESCRIPTION => Some(Part::Tokens),
-        RULE_FILE_REFERENCE_MISSING => Some(Part::FileReferences),
-        _ => None,
-    }
-}
-
-/// Marks how a finding affects the exit code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Severity {
-    Error,
-    Warning,
-}
-
-impl std::fmt::Display for Severity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Severity::Error => write!(f, "error"),
-            Severity::Warning => write!(f, "warning"),
-        }
-    }
-}
-
-/// A single rule violation.
-///
-/// The file is the enclosing [`FileResult`]'s path; the JSON reporter re-adds it.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct Finding {
-    #[serde(skip_serializing_if = "is_zero")]
-    pub line: usize,
-    pub rule: &'static str,
-    pub severity: Severity,
-    pub message: String,
-}
-
-fn is_zero(n: &usize) -> bool {
-    *n == 0
-}
-
-/// The measured token cost of a file's parts.
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct Counts {
-    pub content: usize,
-    #[serde(skip_serializing_if = "is_zero")]
-    pub name: usize,
-    #[serde(skip_serializing_if = "is_zero")]
-    pub description: usize,
-}
-
-/// Everything lintmatter learned about one file.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct FileResult {
-    pub path: String,
-    pub kind: Kind,
-    pub tokens: Counts,
-    /// How well the file rates, 0 to 100. See [`score`].
-    pub score: u8,
-    pub findings: Vec<Finding>,
-}
-
-impl FileResult {
-    pub fn errors(&self) -> usize {
-        self.count(Severity::Error)
-    }
-
-    pub fn warnings(&self) -> usize {
-        self.count(Severity::Warning)
-    }
-
-    fn count(&self, s: Severity) -> usize {
-        self.findings.iter().filter(|f| f.severity == s).count()
-    }
-}
-
-/// Which rules ran on a file and which of them fired. Tracked per rule id, not
-/// per finding, so a rule that reports repeatedly -- an unknown key on every
-/// line, a broken link on every line -- still counts once toward the score.
-#[derive(Debug, Default)]
-struct Tally {
-    applied: HashSet<&'static str>,
-    failed: HashSet<&'static str>,
-}
-
-impl Tally {
-    /// Returns how many of a component's rules ran, and how many of those
-    /// fired.
-    fn counts(&self, p: Part) -> (usize, usize) {
-        let of = |set: &HashSet<&'static str>| set.iter().filter(|r| part(r) == Some(p)).count();
-        (of(&self.applied), of(&self.failed))
-    }
-}
-
-/// Collects findings for the rule currently running, applying `--strict`.
-///
-/// Named for what it does rather than "Reporter", which the `report` module
-/// already means. The rule id comes from the sink rather than each call site,
-/// so a rule cannot file a finding under someone else's id.
-pub struct FindingSink<'a> {
-    findings: &'a mut Vec<Finding>,
-    tally: &'a mut Tally,
-    strict: bool,
-    rule: &'static str,
-}
-
-impl FindingSink<'_> {
-    /// Records a violation that should fail the build.
-    pub fn error(&mut self, line: usize, msg: String) {
-        self.add(Severity::Error, line, msg);
-    }
-
-    /// Records a stylistic mismatch. `--strict` promotes it to an error.
-    pub fn warn(&mut self, line: usize, msg: String) {
-        self.add(Severity::Warning, line, msg);
-    }
-
-    /// Records that the current rule had something to judge on this file,
-    /// whether or not it goes on to fire. A rule that never calls this --
-    /// because its precondition never held, the way `allowed-tools.type`
-    /// stays quiet when the key is absent -- leaves the score's numerator and
-    /// denominator alike, the same way a disabled rule already does by never
-    /// running its `check` at all.
-    pub fn applies(&mut self) {
-        self.tally.applied.insert(self.rule);
-    }
-
-    fn add(&mut self, mut sev: Severity, line: usize, msg: String) {
-        // A rule that fired must be in the denominator too, whether or not the
-        // check site remembered to call `applies` first.
-        self.tally.applied.insert(self.rule);
-        self.tally.failed.insert(self.rule);
-        if sev == Severity::Warning && self.strict {
-            sev = Severity::Error;
-        }
-        self.findings.push(Finding {
-            line,
-            rule: self.rule,
-            severity: sev,
-            message: msg,
-        });
-    }
-}
-
-/// Everything a rule may look at for one file.
-///
-/// Rules read the working directory from here rather than from the process, so
-/// a verdict cannot depend on where the binary happened to be run.
-pub struct FileContext<'a> {
-    pub target: &'a Target,
-    pub doc: &'a Document,
-    pub tokens: &'a Counts,
-    pub cfg: &'a Config,
-    cwd: &'a Path,
-    name: Option<String>,
-    description: Option<String>,
-}
-
-impl FileContext<'_> {
-    /// The front matter, but only when it is usable: present, parsed, and a
-    /// mapping. Rules that read keys go through this, so a malformed block
-    /// short-circuits all of them the same way.
-    pub fn frontmatter(&self) -> Option<&Frontmatter> {
-        self.doc.mapping()
-    }
-
-    /// The skill's name: `Some` only when present and non-empty after
-    /// trimming. That is what keeps `name.format` and friends quiet while
-    /// `name.required` fires, without any rule knowing about the others.
-    pub fn name(&self) -> Option<&str> {
-        self.name.as_deref()
-    }
-
-    /// The skill's description, under the same rule as [`Self::name`].
-    pub fn description(&self) -> Option<&str> {
-        self.description.as_deref()
-    }
-
-    /// The parse error, when it is of the given kind.
-    pub fn error_of(&self, kind: ErrKind) -> Option<&parse::Error> {
-        self.doc.error.as_ref().filter(|e| e.kind == kind)
-    }
-
-    /// Joins `path` onto the working directory when relative and lexically
-    /// normalizes it, without touching the filesystem or resolving symlinks
-    /// (mirroring Go's `filepath.Abs`).
-    pub fn abs_path(&self, path: &Path) -> PathBuf {
-        let joined = if path.is_absolute() {
-            path.to_path_buf()
-        } else {
-            self.cwd.join(path)
-        };
-        clean_path(&joined)
-    }
-
-    /// The name of the directory holding the skill file, or `None` when there
-    /// is no meaningful directory to match the name against: a loose skill
-    /// file in the working directory is named after the project, not the
-    /// skill.
-    pub fn skill_dir(&self) -> Option<String> {
-        let abs = self.abs_path(Path::new(&self.target.path));
-        let dir = abs.parent()?.to_path_buf();
-        if dir == clean_path(self.cwd) {
-            return None;
-        }
-        dir.file_name()?.to_str().map(str::to_string)
-    }
-}
+use super::context::FileContext;
+use super::finding::{Counts, FileResult};
+use super::rules;
+use super::score::score;
+use super::sink::{FindingSink, Tally};
 
 /// A target that vanished or became unreadable after discovery.
 #[derive(Debug, thiserror::Error)]
@@ -395,68 +130,6 @@ fn non_empty(raw: Option<String>) -> Option<String> {
     if s.is_empty() { None } else { Some(s) }
 }
 
-/// Rates one file from 0 to 100: the mean of its frontmatter, token-budget and
-/// file-reference components.
-///
-/// A component with nothing to judge is left out of the mean rather than
-/// counted as perfect, so an inapplicable check cannot inflate a score. That
-/// covers an AGENTS.md, whose front matter lintmatter deliberately does not
-/// validate; a file that names no checkable reference; and a budget switched
-/// off. A file with no applicable component at all rates 100: there was
-/// nothing to hold against it.
-fn score(tokens: &Counts, cfg: &Config, kind: Kind, tally: &Tally) -> u8 {
-    let mut parts: Vec<f64> = Vec::new();
-
-    let (applied, failed) = tally.counts(Part::Frontmatter);
-    if applied > 0 {
-        parts.push(100.0 * (applied - failed) as f64 / applied as f64);
-    }
-
-    // One sub-score per budget that was actually checked, averaged, so a
-    // skill's name and description weigh against its body rather than beside
-    // the other two components.
-    let budgets: Vec<f64> = [
-        (RULE_TOKENS_CONTENT, tokens.content, cfg.content_limit(kind)),
-        (RULE_TOKENS_NAME, tokens.name, cfg.max_skill_name_tokens),
-        (
-            RULE_TOKENS_DESCRIPTION,
-            tokens.description,
-            cfg.max_skill_description_tokens,
-        ),
-    ]
-    .into_iter()
-    .filter(|(rule, _, _)| tally.applied.contains(rule))
-    .map(|(_, count, limit)| budget_score(count, limit))
-    .collect();
-    if !budgets.is_empty() {
-        parts.push(budgets.iter().sum::<f64>() / budgets.len() as f64);
-    }
-
-    if tally.applied.contains(RULE_FILE_REFERENCE_MISSING) {
-        let broken = tally.failed.contains(RULE_FILE_REFERENCE_MISSING);
-        parts.push(if broken { 0.0 } else { 100.0 });
-    }
-
-    if parts.is_empty() {
-        return 100;
-    }
-    let mean = parts.iter().sum::<f64>() / parts.len() as f64;
-    // Floored, so a score only reaches a band it has fully earned: 87.5 rates
-    // 87 rather than being rounded up into an 88 the file did not achieve.
-    mean.clamp(0.0, 100.0).floor() as u8
-}
-
-/// Scores one token budget: full marks at or under the limit, then falling
-/// linearly to zero at twice the limit. Graded rather than pass/fail so a file
-/// a little over its budget does not rate the same as one five times over.
-fn budget_score(count: usize, limit: i64) -> f64 {
-    if limit <= 0 || count as i64 <= limit {
-        return 100.0;
-    }
-    let over = (count as i64 - limit) as f64 / limit as f64;
-    100.0 * (1.0 - over.min(1.0))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -464,63 +137,10 @@ mod tests {
         DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
         DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
     };
+    use crate::lint::ids::*;
+    use crate::lint::test_support::*;
     use std::fs;
-
-    fn write_skill(skill_name: &str, src: &str) -> (tempfile::TempDir, Target) {
-        let base = tempfile::tempdir().unwrap();
-        let dir = base.path().join(skill_name);
-        fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("SKILL.md");
-        fs::write(&path, src).unwrap();
-        let target = Target {
-            path: path.to_string_lossy().to_string(),
-            kind: Kind::Skill,
-            root: base.path().to_path_buf(),
-        };
-        (base, target)
-    }
-
-    fn write_file(dir: &Path, name: &str, src: &str) -> String {
-        let path = dir.join(name);
-        fs::write(&path, src).unwrap();
-        path.to_string_lossy().to_string()
-    }
-
-    fn agents_target(dir: &Path, src: &str) -> Target {
-        agents_target_under(dir, dir, src)
-    }
-
-    /// An AGENTS.md written into `dir`, but discovered under walk root `root`.
-    /// Separate from `agents_target` so a fixture can sit below its root, which
-    /// is what makes a `../` reference back into the tree distinguishable from
-    /// one that escapes it.
-    fn agents_target_under(root: &Path, dir: &Path, src: &str) -> Target {
-        Target {
-            path: write_file(dir, "AGENTS.md", src),
-            kind: Kind::Agents,
-            root: root.to_path_buf(),
-        }
-    }
-
-    fn rule_ids(findings: &[Finding]) -> Vec<&str> {
-        findings.iter().map(|f| f.rule).collect()
-    }
-
-    /// Every budget off, so rule tests see only the rule under test. Spelled
-    /// out rather than derived from Config::default(), which now carries the
-    /// real budgets -- keep it explicit.
-    fn generous_config() -> Config {
-        Config {
-            max_agents_tokens: 0,
-            max_skill_tokens: 0,
-            max_skill_name_tokens: 0,
-            max_skill_description_tokens: 0,
-            disabled: vec![],
-            strict: false,
-        }
-    }
-
-    const VALID_SKILL: &str = "---\nname: valid-skill\ndescription: Use this skill when you need a fixture that passes every rule.\n---\n\n# Valid skill\n\nBody content.\n";
+    use std::path::Path;
 
     #[test]
     fn skill_frontmatter_rules() {
@@ -705,176 +325,6 @@ mod tests {
         assert!(res.tokens.content > 0 && res.tokens.name > 0 && res.tokens.description > 0);
     }
 
-    /// A counter reporting a fixed number, so a score test can sit exactly on
-    /// a budget boundary instead of depending on the estimator's heuristics.
-    struct Fixed(usize);
-
-    impl Counter for Fixed {
-        fn count(&self, _: &str) -> usize {
-            self.0
-        }
-    }
-
-    /// Guards the score against a rule being added and rated by accident: a
-    /// new id has to be given a part before this passes.
-    #[test]
-    fn every_rule_belongs_to_a_score_part() {
-        for rule in RULES.iter() {
-            assert!(part(rule).is_some(), "{rule} is not assigned a score part");
-        }
-    }
-
-    #[test]
-    fn frontmatter_score() {
-        let valid_body = "description: Use this skill when you need a fixture that passes.";
-        let cases: Vec<(&str, &str, String, u8)> = vec![
-            (
-                "clean skill passes every rule applied to it",
-                "valid-skill",
-                VALID_SKILL.to_string(),
-                100,
-            ),
-            (
-                "one of eight rules fails, and 87.5 floors to 87",
-                "Bad_Name",
-                format!("---\nname: Bad_Name\n{valid_body}\n---\nBody.\n"),
-                87,
-            ),
-            (
-                "a rule firing repeatedly still costs one rule",
-                "valid-skill",
-                format!(
-                    "---\nname: valid-skill\n{valid_body}\nauthor: a\nversion: 1\nowner: b\n---\nBody.\n"
-                ),
-                87,
-            ),
-            (
-                "missing front matter leaves one rule applied, and it failed",
-                "no-frontmatter",
-                "# No front matter\n\nBody.\n".to_string(),
-                0,
-            ),
-            (
-                "unparseable front matter scores the same as none",
-                "bad-yaml",
-                "---\nname: bad-yaml\n  description: wrong indent\n---\nBody.\n".to_string(),
-                0,
-            ),
-        ];
-
-        for (name, dir, src, want) in cases {
-            let (_base, target) = write_skill(dir, &src);
-            let res = Linter::new(generous_config()).file(&target).unwrap();
-            assert_eq!(res.score, want, "{name}");
-        }
-    }
-
-    /// A disabled rule was never applied, so it leaves the fraction entirely;
-    /// --strict only moves severities, which the score does not read.
-    #[test]
-    fn score_follows_disable_but_not_strict() {
-        let src = "---\nname: Bad_Name\ndescription: Use this skill for a fixture.\n---\nBody.\n";
-        let (_base, target) = write_skill("Bad_Name", src);
-
-        let res = Linter::new(generous_config()).file(&target).unwrap();
-        assert_eq!(res.score, 87);
-
-        let mut cfg = generous_config();
-        cfg.strict = true;
-        let res = Linter::new(cfg).file(&target).unwrap();
-        assert_eq!(res.score, 87);
-
-        let mut cfg = generous_config();
-        cfg.disabled = vec![RULE_NAME_FORMAT.to_string()];
-        let res = Linter::new(cfg).file(&target).unwrap();
-        assert_eq!(res.score, 100);
-    }
-
-    /// Full marks up to the budget, then falling linearly to zero at twice it.
-    #[test]
-    fn token_score_grades_the_overage() {
-        let base = tempfile::tempdir().unwrap();
-        let target = agents_target(base.path(), "Body.\n");
-        let mut cfg = generous_config();
-        cfg.max_agents_tokens = 100;
-
-        for (count, want) in [
-            (50, 100),
-            (100, 100),
-            (125, 75),
-            (150, 50),
-            (200, 0),
-            (900, 0),
-        ] {
-            let linter = Linter::new(cfg.clone()).with_counter(Box::new(Fixed(count)));
-            let res = linter.file(&target).unwrap();
-            assert_eq!(res.score, want, "{count} tokens against a 100 token budget");
-        }
-    }
-
-    /// A skill's three budgets average into one component, so name and
-    /// description weigh against the body rather than beside the other parts.
-    #[test]
-    fn token_score_averages_the_budgets_that_ran() {
-        let (_base, target) = write_skill("valid-skill", VALID_SKILL);
-        let mut cfg = generous_config();
-        // Only the body is budgeted, and it sits at twice its limit.
-        cfg.max_skill_tokens = 1;
-        let res = Linter::new(cfg.clone())
-            .with_counter(Box::new(Fixed(2)))
-            .file(&target)
-            .unwrap();
-        // Front matter is perfect, the one budget that ran scores zero.
-        assert_eq!(res.score, 50);
-
-        // Budget the name too and it passes, pulling the token part back to 50.
-        cfg.max_skill_name_tokens = 2;
-        let res = Linter::new(cfg)
-            .with_counter(Box::new(Fixed(2)))
-            .file(&target)
-            .unwrap();
-        assert_eq!(res.score, 75);
-    }
-
-    #[test]
-    fn file_reference_score_is_all_or_nothing() {
-        let base = tempfile::tempdir().unwrap();
-        write_file(base.path(), "there.md", "Present.\n");
-        let target = agents_target(base.path(), "See [there](./there.md).\n");
-        let res = Linter::new(generous_config()).file(&target).unwrap();
-        assert_eq!(res.score, 100);
-
-        let base = tempfile::tempdir().unwrap();
-        write_file(base.path(), "there.md", "Present.\n");
-        let target = agents_target(
-            base.path(),
-            "See [there](./there.md) and [gone](./gone.md).\n",
-        );
-        let res = Linter::new(generous_config()).file(&target).unwrap();
-        assert_eq!(res.score, 0);
-    }
-
-    /// An AGENTS.md has no front matter to rate, and with every budget off and
-    /// nothing to resolve there is nothing left to hold against it.
-    #[test]
-    fn parts_with_nothing_to_judge_drop_out() {
-        let base = tempfile::tempdir().unwrap();
-        let target = agents_target(base.path(), "Body with no references.\n");
-        let res = Linter::new(generous_config()).file(&target).unwrap();
-        assert_eq!(res.score, 100);
-
-        // Give it a broken reference and a body twice its budget: the two parts
-        // that now apply average, with front matter still left out.
-        let target = agents_target(base.path(), "See [gone](./gone.md).\n");
-        let mut cfg = generous_config();
-        cfg.max_agents_tokens = 100;
-        let res = Linter::new(cfg)
-            .with_counter(Box::new(Fixed(200)))
-            .file(&target)
-            .unwrap();
-        assert_eq!(res.score, 0);
-    }
-
     #[test]
     fn per_kind_content_budget() {
         let base = tempfile::tempdir().unwrap();
@@ -949,14 +399,6 @@ mod tests {
         assert_eq!(with_res.tokens.content, bare_res.tokens.content);
     }
 
-    struct FixedCounter(usize);
-
-    impl Counter for FixedCounter {
-        fn count(&self, _: &str) -> usize {
-            self.0
-        }
-    }
-
     #[test]
     fn with_counter_substitutes_the_token_counter() {
         let (_base, target) = write_skill("counted", VALID_SKILL);
@@ -964,14 +406,14 @@ mod tests {
         let mut cfg = generous_config();
         cfg.max_skill_tokens = 10;
         let res = Linter::new(cfg.clone())
-            .with_counter(Box::new(FixedCounter(11)))
+            .with_counter(Box::new(Fixed(11)))
             .file(&target)
             .unwrap();
         assert_eq!(res.tokens.content, 11);
         assert!(res.findings.iter().any(|f| f.rule == RULE_TOKENS_CONTENT));
 
         let res = Linter::new(cfg)
-            .with_counter(Box::new(FixedCounter(9)))
+            .with_counter(Box::new(Fixed(9)))
             .file(&target)
             .unwrap();
         assert_eq!(res.tokens.content, 9);

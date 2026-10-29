@@ -5,17 +5,18 @@ use std::io::{self, Write};
 use crate::lint::{FileResult, Finding, Severity};
 use crate::utils::plural;
 
-use super::{Report, Summary, filter_errors};
+use super::Summary;
+use super::reporter::{Report, filter_errors};
 
-pub(super) const RED: &str = "\x1b[31m";
-pub(super) const YELLOW: &str = "\x1b[33m";
-pub(super) const ORANGE: &str = "\x1b[38;5;208m";
-pub(super) const GREEN: &str = "\x1b[32m";
-pub(super) const BOLD: &str = "\x1b[1m";
-pub(super) const RESET: &str = "\x1b[0m";
+const RED: &str = "\x1b[31m";
+const YELLOW: &str = "\x1b[33m";
+const ORANGE: &str = "\x1b[38;5;208m";
+const GREEN: &str = "\x1b[32m";
+const BOLD: &str = "\x1b[1m";
+const RESET: &str = "\x1b[0m";
 
-pub(super) const ERROR_EMOJI: &str = "\u{274c}"; // ❌
-pub(super) const WARNING_EMOJI: &str = "\u{26a0}\u{fe0f}"; // ⚠️
+const ERROR_EMOJI: &str = "\u{274c}"; // ❌
+const WARNING_EMOJI: &str = "\u{26a0}\u{fe0f}"; // ⚠️
 
 /// The color a score bands into: green is healthy, yellow wants a look,
 /// orange is a real problem, red wants work.
@@ -31,7 +32,7 @@ fn score_color(score: u8) -> &'static str {
 /// The band label a score falls into, mirroring the web UI's score card
 /// (see web/src/index.html's `SCORE_BANDS`) so a run rates the same in both
 /// places.
-pub(super) fn score_band_label(score: u8) -> &'static str {
+fn score_band_label(score: u8) -> &'static str {
     match score {
         90..=100 => "Healthy",
         70..=89 => "Worth a look",
@@ -41,7 +42,7 @@ pub(super) fn score_band_label(score: u8) -> &'static str {
 }
 
 /// Colors a score by band so a report scans at a glance.
-pub(super) fn paint_score(color: bool, score: u8) -> String {
+fn paint_score(color: bool, score: u8) -> String {
     paint(color, score_color(score), &score.to_string())
 }
 
@@ -198,4 +199,132 @@ fn write_scorecard(w: &mut dyn Write, color: bool, s: &Summary) -> io::Result<()
     writeln!(w, "│ {meta_out}{} │", pad(&meta_plain))?;
     writeln!(w, "└{border}┘")?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::discover::Kind;
+    use crate::lint::Counts;
+    use crate::report::summarize;
+    use crate::report::test_support::results;
+
+    fn render_text(results: &[FileResult], quiet: bool, color: bool) -> Vec<u8> {
+        let mut buf = Vec::new();
+        TextReporter { quiet, color }
+            .render(&mut buf, results, &summarize(results))
+            .unwrap();
+        buf
+    }
+
+    #[test]
+    fn text_output_shape() {
+        let buf = render_text(&results(), false, false);
+        let out = String::from_utf8(buf).unwrap();
+        let lines: Vec<&str> = out.trim_end_matches('\n').split('\n').collect();
+        assert_eq!(lines.len(), 11, "{out}");
+        assert_eq!(lines[0], "AGENTS.md  50");
+        assert!(
+            lines[1].starts_with("  error: tokens.content: "),
+            "{}",
+            lines[1]
+        );
+        assert_eq!(lines[2], "");
+        assert_eq!(lines[3], "skills/thing/SKILL.md  96");
+        assert!(
+            lines[4].starts_with("  2: warning: name.dir-mismatch: "),
+            "{}",
+            lines[4]
+        );
+        assert_eq!(lines[5], "");
+        // The run's scorecard: a bordered box with the score on top, a blank
+        // line, then the file counts underneath.
+        assert!(
+            lines[6].starts_with('┌') && lines[6].ends_with('┐'),
+            "{out}"
+        );
+        assert!(lines[7].contains("Score: 73/100 · Worth a look"), "{out}");
+        assert!(
+            lines[8].starts_with('│')
+                && lines[8].ends_with('│')
+                && lines[8].trim_matches('│').trim().is_empty(),
+            "{out}"
+        );
+        assert!(
+            lines[9].contains("2 files checked, 1 file with errors, 1 file with warnings"),
+            "{out}"
+        );
+        assert!(
+            lines[10].starts_with('└') && lines[10].ends_with('┘'),
+            "{out}"
+        );
+    }
+
+    /// A file with a perfect score is dropped entirely -- there's nothing to
+    /// flag -- in both the normal and `--quiet` views.
+    #[test]
+    fn text_drops_files_with_a_perfect_score() {
+        let clean = vec![FileResult {
+            path: "skills/good/SKILL.md".to_string(),
+            kind: Kind::Skill,
+            tokens: Counts::default(),
+            score: 100,
+            findings: vec![],
+        }];
+        let out = String::from_utf8(render_text(&clean, false, false)).unwrap();
+        assert!(!out.contains("skills/good/SKILL.md"), "{out}");
+        assert!(out.contains("Score: 100/100 · Healthy"), "{out}");
+
+        let out = String::from_utf8(render_text(&clean, true, false)).unwrap();
+        assert!(!out.contains("skills/good/SKILL.md"), "{out}");
+    }
+
+    #[test]
+    fn text_quiet_suppresses_warnings() {
+        let buf = render_text(&results(), true, false);
+        let out = String::from_utf8(buf).unwrap();
+        assert!(!out.contains("warning: "));
+        assert!(out.contains("1 file with warnings"));
+    }
+
+    #[test]
+    fn text_singular_plural() {
+        let buf = render_text(&[], false, false);
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("Score: 100/100 · Healthy"), "{out}");
+        assert!(
+            out.contains("0 files checked, 0 files with errors, 0 files with warnings"),
+            "{out}"
+        );
+    }
+
+    #[test]
+    fn text_color_adds_symbols_and_sgr_codes() {
+        let buf = render_text(&results(), false, true);
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains(ERROR_EMOJI), "{out}");
+        assert!(out.contains(WARNING_EMOJI), "{out}");
+        assert!(out.contains(RED), "{out}");
+        assert!(out.contains(YELLOW), "{out}");
+        assert!(out.contains(BOLD), "{out}");
+        assert!(out.contains(RESET), "{out}");
+        assert!(out.contains("error"), "{out}");
+        assert!(out.contains("warning"), "{out}");
+    }
+
+    #[test]
+    fn text_color_clean_run_shows_green_count() {
+        let buf = render_text(&[], false, true);
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains(GREEN), "{out}");
+        assert!(!out.contains(RED), "{out}");
+        assert!(!out.contains(YELLOW), "{out}");
+    }
+
+    /// A mid-range score bad enough to fall short of yellow still isn't the
+    /// worst band: it's painted orange rather than red.
+    #[test]
+    fn paint_score_orange_band() {
+        assert_eq!(paint_score(true, 60), format!("{ORANGE}60{RESET}"));
+    }
 }
