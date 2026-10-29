@@ -4,12 +4,12 @@
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-use crate::discover::Kind;
 use crate::lint::rule::Rule;
 use crate::lint::{
     FileContext, FindingSink, RULE_FRONTMATTER_INVALID, RULE_FRONTMATTER_MISSING,
     RULE_FRONTMATTER_NOT_FIRST, RULE_FRONTMATTER_UNKNOWN_KEY, RULE_FRONTMATTER_UNTERMINATED,
 };
+use crate::model::Kind;
 use crate::parse::ErrKind;
 
 /// The front-matter keys the skill spec defines, plus the Claude Code

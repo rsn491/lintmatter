@@ -2,8 +2,7 @@
 
 use std::io::{self, Write};
 
-use crate::discover::Kind;
-use crate::lint::{Counts, FileResult, Severity};
+use crate::model::{Counts, FileResult, Kind, Severity};
 
 use super::{Report, SCHEMA_VERSION, Summary};
 

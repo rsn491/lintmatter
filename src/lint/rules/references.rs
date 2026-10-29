@@ -6,10 +6,10 @@ use std::sync::LazyLock;
 
 use regex::{Captures, Regex};
 
-use crate::discover::Kind;
 use crate::fence::FenceTracker;
 use crate::lint::rule::Rule;
 use crate::lint::{FileContext, FindingSink, RULE_FILE_REFERENCE_MISSING};
+use crate::model::Kind;
 
 /// Matches inline markdown links and images: `[text](target)` or
 /// `![alt](target)`. Does not handle reference-style links (`[text][ref]`).

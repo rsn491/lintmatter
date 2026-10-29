@@ -11,6 +11,7 @@ pub mod config;
 pub mod discover;
 pub mod fence;
 pub mod lint;
+pub mod model;
 pub mod parse;
 pub mod report;
 pub mod tokens;

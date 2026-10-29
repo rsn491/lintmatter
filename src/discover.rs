@@ -6,35 +6,8 @@ use std::path::{Path, PathBuf};
 
 use glob::Pattern;
 
+use crate::model::{Kind, Target};
 use crate::utils::to_slash;
-
-/// Distinguishes the two file types lintmatter understands.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Kind {
-    Agents,
-    Skill,
-}
-
-impl std::fmt::Display for Kind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Kind::Agents => write!(f, "agents"),
-            Kind::Skill => write!(f, "skill"),
-        }
-    }
-}
-
-/// A single file to lint.
-#[derive(Debug, Clone)]
-pub struct Target {
-    pub path: String,
-    pub kind: Kind,
-    /// The tree this target was found under: the directory argument that
-    /// produced it, or the file's own directory when named explicitly. Rules
-    /// use it to tell a reference into the linted tree from one that escapes.
-    pub root: PathBuf,
-}
 
 /// Recursion limit, so a pathological layout cannot exhaust the stack.
 const MAX_DEPTH: usize = 64;

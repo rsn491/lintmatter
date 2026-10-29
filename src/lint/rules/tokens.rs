@@ -4,11 +4,11 @@
 //! these rules only compare them against the configured budgets. A budget of
 //! zero disables its check.
 
-use crate::discover::Kind;
 use crate::lint::rule::Rule;
 use crate::lint::{
     FileContext, FindingSink, RULE_TOKENS_CONTENT, RULE_TOKENS_DESCRIPTION, RULE_TOKENS_NAME,
 };
+use crate::model::Kind;
 use crate::utils::humanize;
 
 fn over_budget(sink: &mut FindingSink<'_>, line: usize, what: &str, got: usize, limit: i64) {

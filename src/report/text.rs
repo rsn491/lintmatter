@@ -2,7 +2,7 @@
 
 use std::io::{self, Write};
 
-use crate::lint::{FileResult, Finding, Severity};
+use crate::model::{FileResult, Finding, Severity};
 use crate::utils::plural;
 
 use super::{Report, Summary, filter_errors};

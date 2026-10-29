@@ -1,6 +1,6 @@
 //! The contract every lint rule implements.
 
-use crate::discover::Kind;
+use crate::model::Kind;
 
 use super::{FileContext, FindingSink};
 

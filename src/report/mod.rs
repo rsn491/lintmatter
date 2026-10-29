@@ -5,7 +5,7 @@ mod text;
 
 use std::io::{self, Write};
 
-use crate::lint::{FileResult, Finding, Severity};
+use crate::model::{FileResult, Finding, Severity};
 
 pub use json::JsonReporter;
 pub use text::TextReporter;
@@ -78,8 +78,8 @@ fn filter_errors(findings: &[Finding]) -> Vec<Finding> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::discover::Kind;
-    use crate::lint::Counts;
+    use crate::model::Counts;
+    use crate::model::Kind;
 
     use super::text::{
         BOLD, ERROR_EMOJI, GREEN, ORANGE, RED, RESET, WARNING_EMOJI, YELLOW, paint_score,

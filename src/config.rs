@@ -16,16 +16,14 @@ use std::path::{Path, PathBuf};
 
 use saphyr::{LoadableYamlNode, MarkedYaml, YamlData};
 
-use crate::discover::Kind;
 use crate::lint::RULES;
+use crate::model::Kind;
 use crate::parse::scalar_string;
 
-/// Default token budgets. `Config::default` and the CLI's flag defaults both
-/// read these, so the two cannot drift apart.
-pub const DEFAULT_MAX_AGENTS_TOKENS: i64 = 2500;
-pub const DEFAULT_MAX_SKILL_TOKENS: i64 = 5000;
-pub const DEFAULT_MAX_SKILL_NAME_TOKENS: i64 = 16;
-pub const DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS: i64 = 100;
+pub use crate::model::{
+    DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_NAME_TOKENS,
+    DEFAULT_MAX_SKILL_TOKENS,
+};
 
 /// Holds the thresholds and switches that shape a run.
 #[derive(Debug, Clone)]

@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn every_rule_applies_to_at_least_one_kind() {
-        use crate::discover::Kind;
+        use crate::model::Kind;
         for rule in all() {
             assert!(
                 rule.applies_to(Kind::Skill) || rule.applies_to(Kind::Agents),
