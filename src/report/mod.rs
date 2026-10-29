@@ -1,5 +1,6 @@
 //! Renders lint results for humans and for machines.
 
+mod format;
 mod json;
 mod text;
 

@@ -14,6 +14,25 @@ pub mod tokens;
 
 use super::rule::Rule;
 
+/// Renders n with thousands separators, so "6,142 tokens" reads at a glance
+/// in reports.
+pub(crate) fn humanize(n: i64) -> String {
+    let s = n.to_string();
+    if n < 0 {
+        return s;
+    }
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+    let mut out = String::with_capacity(len + len / 3);
+    for (i, b) in bytes.iter().enumerate() {
+        if i > 0 && (len - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(*b as char);
+    }
+    out
+}
+
 /// Every rule, in report order.
 static ALL: &[&dyn Rule] = &[
     &frontmatter::Missing,
@@ -44,6 +63,22 @@ pub fn all() -> &'static [&'static dyn Rule] {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn humanize_formats_with_separators() {
+        let cases: &[(i64, &str)] = &[
+            (0, "0"),
+            (7, "7"),
+            (999, "999"),
+            (1000, "1,000"),
+            (6142, "6,142"),
+            (1234567, "1,234,567"),
+            (-42, "-42"),
+        ];
+        for (n, want) in cases {
+            assert_eq!(humanize(*n), *want, "humanize({n})");
+        }
+    }
 
     #[test]
     fn ids_are_unique_and_well_formed() {

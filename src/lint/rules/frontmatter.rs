@@ -10,7 +10,7 @@ use crate::lint::{
     RULE_FRONTMATTER_NOT_FIRST, RULE_FRONTMATTER_UNKNOWN_KEY, RULE_FRONTMATTER_UNTERMINATED,
 };
 use crate::model::Kind;
-use crate::parse::ErrKind;
+use crate::source::parse::ErrKind;
 
 /// The front-matter keys the skill spec defines, plus the Claude Code
 /// extensions lintmatter additionally supports. Anything else is reported as an

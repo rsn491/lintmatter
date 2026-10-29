@@ -2,7 +2,7 @@
 
 use crate::lint::rule::Rule;
 use crate::lint::{FileContext, FindingSink, RULE_ALLOWED_TOOLS_TYPE, RULE_METADATA_TYPE};
-use crate::parse::Value;
+use crate::source::parse::Value;
 
 pub struct AllowedToolsType;
 

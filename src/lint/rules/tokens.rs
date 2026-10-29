@@ -5,11 +5,11 @@
 //! zero disables its check.
 
 use crate::lint::rule::Rule;
+use crate::lint::rules::humanize;
 use crate::lint::{
     FileContext, FindingSink, RULE_TOKENS_CONTENT, RULE_TOKENS_DESCRIPTION, RULE_TOKENS_NAME,
 };
 use crate::model::Kind;
-use crate::utils::humanize;
 
 fn over_budget(sink: &mut FindingSink<'_>, line: usize, what: &str, got: usize, limit: i64) {
     if limit <= 0 || got as i64 <= limit {

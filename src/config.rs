@@ -18,7 +18,7 @@ use saphyr::{LoadableYamlNode, MarkedYaml, YamlData};
 
 use crate::lint::RULES;
 use crate::model::Kind;
-use crate::parse::scalar_string;
+use crate::source::parse::scalar_string;
 
 pub use crate::model::{
     DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_NAME_TOKENS,

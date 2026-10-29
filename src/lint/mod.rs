@@ -9,9 +9,9 @@ use std::sync::LazyLock;
 
 use crate::config::Config;
 use crate::model::{Counts, FileResult, Finding, Kind, Severity, Target};
-use crate::parse::{self, Document, ErrKind, Frontmatter};
+use crate::source::parse::{self, Document, ErrKind, Frontmatter};
+use crate::source::paths::clean_path;
 use crate::tokens::{self, Counter};
-use crate::utils::clean_path;
 
 // Rule ids. Listed here so callers -- and `--disable` -- can name a rule
 // without knowing which module implements it; each rule module imports the one

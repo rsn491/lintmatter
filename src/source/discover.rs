@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use glob::Pattern;
 
 use crate::model::{Kind, Target};
-use crate::utils::to_slash;
+use crate::source::paths::to_slash;
 
 /// Recursion limit, so a pathological layout cannot exhaust the stack.
 const MAX_DEPTH: usize = 64;

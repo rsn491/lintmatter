@@ -7,9 +7,9 @@ use crate::config::{
     self, Config, DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
     DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
 };
-use crate::discover;
 use crate::lint;
 use crate::report;
+use crate::source::discover;
 
 /// No errors were found; warnings alone still exit OK.
 pub const EXIT_OK: i32 = 0;

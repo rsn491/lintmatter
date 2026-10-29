@@ -1,11 +1,11 @@
 //! Rules over a skill's `description`.
 
 use crate::lint::rule::Rule;
+use crate::lint::rules::humanize;
 use crate::lint::{
     FileContext, FindingSink, MAX_DESCRIPTION_CHARS, RULE_DESCRIPTION_LENGTH,
     RULE_DESCRIPTION_REQUIRED,
 };
-use crate::utils::humanize;
 
 pub struct Required;
 
