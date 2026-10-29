@@ -1,7 +1,8 @@
 # Working in lintmatter
 
 `lintmatter` lints agent instruction files. It is a Rust CLI; the YAML front
-matter is parsed with `saphyr`, everything else is hand-rolled.
+matter is parsed with `saphyr` and flags with `clap`; everything else is
+hand-rolled.
 
 ## Checks before pushing
 
@@ -17,7 +18,7 @@ cargo test --workspace
 - `src/lib.rs` — the module list. The crate is a library as well as a binary so
   `web/` can read settings such as the default budgets from it rather than
   restating numbers that would drift.
-- `src/cli.rs` — flags, orchestration, exit codes. `Cli` is built (validated) from
+- `src/cli.rs` — flags (a `clap` derive on `Flags`), orchestration, exit codes. `Cli` is built (validated) from
   the merged settings, then executed. `run` takes its writers as arguments so
   tests drive the whole CLI in-process. The four token-budget
   fields on `Flags` are `Option`s so an unset flag can fall through to the
@@ -75,7 +76,7 @@ cargo test --workspace
 ## Adding a setting
 
 A setting that belongs in a project's config file needs three edits: an
-`Option` field on `cli.rs`'s `Flags` plus its arm in `parse_args`, a key in
+`Option` field on `cli.rs`'s `Flags` plus its `#[arg]` attribute, a key in
 `config.rs`'s `KNOWN_KEYS` and its arm in `parse`, and a line in `resolve` that
 picks flag over file over default. Document it in the README's flag table. A
 token budget needs two more: a field on `web/src/lint.rs`'s `Budgets` with its
