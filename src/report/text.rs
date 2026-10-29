@@ -3,9 +3,9 @@
 use std::io::{self, Write};
 
 use super::format::plural;
-use crate::model::{FileResult, Finding, Severity};
+use crate::model::{FileResult, Severity};
 
-use super::{Report, Summary, filter_errors};
+use super::{Report, Summary};
 
 pub(super) const RED: &str = "\x1b[31m";
 pub(super) const YELLOW: &str = "\x1b[33m";
@@ -73,17 +73,15 @@ fn visible_width(s: &str) -> usize {
 }
 
 /// Groups findings under a header naming their file and its score, so the
-/// path is not repeated on every line. A file with a perfect score is
-/// dropped entirely -- score 100 means no findings, so there is nothing to
-/// report -- the same way `--quiet` drops any file with nothing left to
-/// report. A blank line separates file groups and sets the final summary
+/// path is not repeated on every line. A file with nothing to report is
+/// dropped entirely: one with a perfect score, which means no findings, and
+/// one whose findings `--quiet` has already filtered away. A blank line separates file groups and sets the final summary
 /// line apart.
 ///
 /// When `color` is set, severities are colorized and prefixed with a symbol;
 /// otherwise the output is plain text, unchanged from earlier versions so it
 /// stays friendly to grep and diffing.
 pub struct TextReporter {
-    pub quiet: bool,
     pub color: bool,
 }
 
@@ -96,17 +94,7 @@ impl Report for TextReporter {
     ) -> io::Result<()> {
         let color = self.color;
         for r in results {
-            let owned;
-            let findings: &[Finding] = if self.quiet {
-                owned = filter_errors(&r.findings);
-                &owned
-            } else {
-                &r.findings
-            };
-            if self.quiet && findings.is_empty() {
-                continue;
-            }
-            if r.score == 100 {
+            if r.score == 100 || r.findings.is_empty() {
                 continue;
             }
             writeln!(
@@ -115,7 +103,7 @@ impl Report for TextReporter {
                 paint(color, BOLD, &r.path),
                 paint_score(color, r.score)
             )?;
-            for f in findings {
+            for f in &r.findings {
                 let location = if f.line > 0 {
                     format!("{}: ", f.line)
                 } else {

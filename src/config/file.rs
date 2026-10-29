@@ -1,56 +1,25 @@
-//! The thresholds and switches that shape a lint run, and the YAML config
-//! file a repository can use to pin them once instead of repeating flags on
-//! every invocation.
-//!
-//! Run-behavior flags (`--strict`, `--quiet`, `--format`, `--color`) are
-//! deliberately not configurable here: they shape how a single invocation
-//! reports its findings, not what the repository considers a violation, so
-//! they stay flag-only.
-//!
-//! Every file setting mirrors the flag of the same name. Flags win over the
-//! file, and the file wins over the built-in defaults, so a config file sets
-//! the project's baseline without preventing a one-off override on the
-//! command line.
+//! The `.lintmatter.yaml` file: finding it, and reading it into [`Settings`].
 
 use std::path::{Path, PathBuf};
 
 use saphyr::{LoadableYamlNode, MarkedYaml, YamlData};
 
 use crate::lint::RULES;
+use crate::model::FIELDS;
 use crate::source::parse::scalar_string;
+use crate::source::paths::to_slash;
 
-pub use crate::model::{
-    DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_NAME_TOKENS,
-    DEFAULT_MAX_SKILL_TOKENS,
-};
+use super::Settings;
 
 /// File names looked for when `--config` is not given, in priority order.
 pub const FILE_NAMES: &[&str] = &[".lintmatter.yaml", ".lintmatter.yml"];
 
 /// Every setting a config file may carry, in the order the usage text lists
-/// them. Backs both parsing and the "unknown setting" message.
-const KNOWN_KEYS: &[&str] = &[
-    "max-agents-tokens",
-    "max-skill-tokens",
-    "max-skill-name-tokens",
-    "max-skill-description-tokens",
-    "exclude",
-    "rules",
-];
-
-/// The settings one config file asked for. Every scalar is optional: absent
-/// means "leave it to the flag or the default", which is what makes merging
-/// unambiguous.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Settings {
-    pub max_agents_tokens: Option<i64>,
-    pub max_skill_tokens: Option<i64>,
-    pub max_skill_name_tokens: Option<i64>,
-    pub max_skill_description_tokens: Option<i64>,
-    /// Globs of paths to skip, appended to any `--exclude`.
-    pub excludes: Vec<String>,
-    /// Rule ids switched off under `rules:`, appended to any `--disable`.
-    pub disabled: Vec<String>,
+/// them, for the "unknown setting" message.
+fn known_keys() -> Vec<&'static str> {
+    let mut keys: Vec<&str> = FIELDS.iter().map(|f| f.key).collect();
+    keys.extend(["exclude", "rules"]);
+    keys
 }
 
 /// Returns the config file governing `start`: the first of [`FILE_NAMES`]
@@ -70,7 +39,7 @@ pub fn discover(start: &Path) -> Option<PathBuf> {
 
 /// Reads and parses a config file.
 pub fn load(path: &Path) -> Result<Settings, String> {
-    let display = path.to_string_lossy().replace('\\', "/");
+    let display = to_slash(path);
     let src = std::fs::read_to_string(path)
         .map_err(|e| format!("cannot read config {}: {e}", path.display()))?;
     parse(&src, &display)
@@ -107,21 +76,17 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, String> {
         let Some(name) = scalar_string(&key.data) else {
             return Err(format!("{path}:{line}: setting names must be strings"));
         };
+        if let Some(slot) = cfg.budgets.get_mut(&name) {
+            *slot = Some(budget(path, &name, value)?);
+            continue;
+        }
         match name.as_str() {
-            "max-agents-tokens" => cfg.max_agents_tokens = Some(budget(path, &name, value)?),
-            "max-skill-tokens" => cfg.max_skill_tokens = Some(budget(path, &name, value)?),
-            "max-skill-name-tokens" => {
-                cfg.max_skill_name_tokens = Some(budget(path, &name, value)?)
-            }
-            "max-skill-description-tokens" => {
-                cfg.max_skill_description_tokens = Some(budget(path, &name, value)?);
-            }
             "exclude" => cfg.excludes = string_list(path, &name, value)?,
             "rules" => cfg.disabled = rules(path, value)?,
             _ => {
                 return Err(format!(
                     "{path}:{line}: unknown setting {name:?}: want one of {}",
-                    KNOWN_KEYS.join(", ")
+                    known_keys().join(", ")
                 ));
             }
         }
@@ -216,6 +181,7 @@ fn is_null(node: &MarkedYaml) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::Budgets;
     use std::fs;
 
     fn parse_str(src: &str) -> Result<Settings, String> {
@@ -241,10 +207,12 @@ rules:
         assert_eq!(
             got,
             Settings {
-                max_agents_tokens: Some(1200),
-                max_skill_tokens: Some(0),
-                max_skill_name_tokens: Some(8),
-                max_skill_description_tokens: Some(64),
+                budgets: Budgets {
+                    agents: Some(1200),
+                    skill: Some(0),
+                    skill_name: Some(8),
+                    skill_description: Some(64),
+                },
                 excludes: vec!["testdata".to_string(), "examples/**".to_string()],
                 // Only the rules switched off are collected, in file order.
                 disabled: vec![
@@ -342,7 +310,7 @@ rules:
         fs::write(&path, "max-skill-tokens: 42\n").unwrap();
 
         let got = load(&path).unwrap();
-        assert_eq!(got.max_skill_tokens, Some(42));
+        assert_eq!(got.budgets.skill, Some(42));
 
         let err = load(&dir.path().join("nope.yaml")).unwrap_err();
         assert!(err.contains("cannot read config"), "{err}");

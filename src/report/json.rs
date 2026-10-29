@@ -14,7 +14,7 @@ struct JsonReport<'a> {
 }
 
 /// Serialization view of [`FileResult`]: re-attaches `file` to each finding to
-/// keep the wire format, and filters `--quiet` warnings without cloning.
+/// keep the wire format.
 #[derive(serde::Serialize)]
 struct JsonFile<'a> {
     path: &'a str,
@@ -40,9 +40,7 @@ fn is_zero(n: &usize) -> bool {
 
 /// Writes the whole run as a single object, sorted by path upstream so the
 /// output diffs cleanly between runs.
-pub struct JsonReporter {
-    pub quiet: bool,
-}
+pub struct JsonReporter;
 
 impl Report for JsonReporter {
     fn render(
@@ -61,7 +59,6 @@ impl Report for JsonReporter {
                 findings: r
                     .findings
                     .iter()
-                    .filter(|f| !self.quiet || f.severity != Severity::Warning)
                     .map(|f| JsonFinding {
                         file: &r.path,
                         line: f.line,

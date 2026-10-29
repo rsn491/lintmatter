@@ -6,7 +6,7 @@ mod text;
 
 use std::io::{self, Write};
 
-use crate::model::{FileResult, Finding, Severity};
+use crate::model::FileResult;
 
 pub use json::JsonReporter;
 pub use text::TextReporter;
@@ -67,36 +67,26 @@ pub trait Report {
     ) -> io::Result<()>;
 }
 
-/// Drops warnings, for `--quiet`.
-fn filter_errors(findings: &[Finding]) -> Vec<Finding> {
-    findings
-        .iter()
-        .filter(|f| f.severity != Severity::Warning)
-        .cloned()
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Counts;
-    use crate::model::Kind;
+    use crate::model::{Counts, Finding, Kind, Severity};
 
     use super::text::{
         BOLD, ERROR_EMOJI, GREEN, ORANGE, RED, RESET, WARNING_EMOJI, YELLOW, paint_score,
     };
 
-    fn render_text(results: &[FileResult], quiet: bool, color: bool) -> Vec<u8> {
+    fn render_text(results: &[FileResult], color: bool) -> Vec<u8> {
         let mut buf = Vec::new();
-        TextReporter { quiet, color }
+        TextReporter { color }
             .render(&mut buf, results, &summarize(results))
             .unwrap();
         buf
     }
 
-    fn render_json(results: &[FileResult], quiet: bool) -> Vec<u8> {
+    fn render_json(results: &[FileResult]) -> Vec<u8> {
         let mut buf = Vec::new();
-        JsonReporter { quiet }
+        JsonReporter
             .render(&mut buf, results, &summarize(results))
             .unwrap();
         buf
@@ -154,7 +144,7 @@ mod tests {
 
     #[test]
     fn text_output_shape() {
-        let buf = render_text(&results(), false, false);
+        let buf = render_text(&results(), false);
         let out = String::from_utf8(buf).unwrap();
         let lines: Vec<&str> = out.trim_end_matches('\n').split('\n').collect();
         assert_eq!(lines.len(), 11, "{out}");
@@ -195,8 +185,8 @@ mod tests {
         );
     }
 
-    /// A file with a perfect score is dropped entirely -- there's nothing to
-    /// flag -- in both the normal and `--quiet` views.
+    /// A file with a perfect score is dropped entirely: there's nothing to
+    /// flag.
     #[test]
     fn text_drops_files_with_a_perfect_score() {
         let clean = vec![FileResult {
@@ -206,25 +196,30 @@ mod tests {
             score: 100,
             findings: vec![],
         }];
-        let out = String::from_utf8(render_text(&clean, false, false)).unwrap();
+        let out = String::from_utf8(render_text(&clean, false)).unwrap();
         assert!(!out.contains("skills/good/SKILL.md"), "{out}");
         assert!(out.contains("Score: 100/100 · Healthy"), "{out}");
-
-        let out = String::from_utf8(render_text(&clean, true, false)).unwrap();
-        assert!(!out.contains("skills/good/SKILL.md"), "{out}");
     }
 
+    /// What `--quiet` leaves behind: a file whose findings were all
+    /// warnings, now with none, is dropped like a clean one.
     #[test]
-    fn text_quiet_suppresses_warnings() {
-        let buf = render_text(&results(), true, false);
+    fn text_drops_files_with_no_findings_left() {
+        let mut quieted = results();
+        quieted[1].findings.clear();
+        let summary = summarize(&results());
+        let mut buf = Vec::new();
+        TextReporter { color: false }
+            .render(&mut buf, &quieted, &summary)
+            .unwrap();
         let out = String::from_utf8(buf).unwrap();
-        assert!(!out.contains("warning: "));
-        assert!(out.contains("1 file with warnings"));
+        assert!(!out.contains("skills/thing/SKILL.md"), "{out}");
+        assert!(out.contains("1 file with warnings"), "{out}");
     }
 
     #[test]
     fn text_singular_plural() {
-        let buf = render_text(&[], false, false);
+        let buf = render_text(&[], false);
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains("Score: 100/100 · Healthy"), "{out}");
         assert!(
@@ -235,7 +230,7 @@ mod tests {
 
     #[test]
     fn text_color_adds_symbols_and_sgr_codes() {
-        let buf = render_text(&results(), false, true);
+        let buf = render_text(&results(), true);
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains(ERROR_EMOJI), "{out}");
         assert!(out.contains(WARNING_EMOJI), "{out}");
@@ -249,7 +244,7 @@ mod tests {
 
     #[test]
     fn text_color_clean_run_shows_green_count() {
-        let buf = render_text(&[], false, true);
+        let buf = render_text(&[], true);
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains(GREEN), "{out}");
         assert!(!out.contains(RED), "{out}");
@@ -265,7 +260,7 @@ mod tests {
 
     #[test]
     fn json_output_shape() {
-        let buf = render_json(&results(), false);
+        let buf = render_json(&results());
         let got: serde_json::Value = serde_json::from_slice(&buf).unwrap();
         assert_eq!(got["version"], SCHEMA_VERSION);
         assert_eq!(got["files"].as_array().unwrap().len(), 2);
@@ -277,33 +272,5 @@ mod tests {
         assert_eq!(got["files"][1]["score"], 96);
         assert_eq!(got["files"][1]["tokens"]["name"], 2);
         assert!(!String::from_utf8(buf).unwrap().contains("\"line\": 0"));
-    }
-
-    #[test]
-    fn json_quiet_suppresses_warnings() {
-        let buf = render_json(&results(), true);
-        let got: serde_json::Value = serde_json::from_slice(&buf).unwrap();
-        for file in got["files"].as_array().unwrap() {
-            for finding in file["findings"].as_array().unwrap() {
-                assert_ne!(finding["severity"], "warning");
-            }
-        }
-        assert_eq!(got["summary"]["files_with_warnings"], 1);
-    }
-
-    #[test]
-    fn json_quiet_does_not_mutate_input() {
-        let input = results();
-        let buf = render_json(&input, true);
-
-        // The rendered report drops the warning, but the caller's results are
-        // left intact -- quiet is a view, not an edit.
-        let got: serde_json::Value = serde_json::from_slice(&buf).unwrap();
-        for file in got["files"].as_array().unwrap() {
-            assert!(file["findings"].as_array().unwrap().is_empty() || file["path"] == "AGENTS.md");
-        }
-        assert_eq!(got["summary"]["files_with_warnings"], 1);
-        assert_eq!(summarize(&input).files_with_warnings, 1);
-        assert_eq!(input[1].findings.len(), 1);
     }
 }
