@@ -1,7 +1,8 @@
 //! The file-reference rule: markdown links and path-shaped inline code spans
 //! whose target looks like a local file but does not resolve to one.
 
-use std::path::Path;
+use std::ops::Range;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
 use regex::{Captures, Regex};
@@ -10,6 +11,7 @@ use crate::discover::Kind;
 use crate::fence::FenceTracker;
 use crate::lint::rule::Rule;
 use crate::lint::{FileContext, FindingSink, RULE_FILE_REFERENCE_MISSING};
+use crate::parse::Document;
 
 /// Matches inline markdown links and images: `[text](target)` or
 /// `![alt](target)`. Does not handle reference-style links (`[text][ref]`).
@@ -44,54 +46,97 @@ impl Rule for Missing {
     }
 
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
-        let path = &ctx.target.path;
-        let dir = Path::new(path).parent().unwrap_or_else(|| Path::new(""));
         let root = ctx.abs_path(&ctx.target.root);
-        let offset = if ctx.doc.frontmatter.present {
-            ctx.doc.frontmatter.end_line
-        } else {
-            0
-        };
-
-        let mut fences = FenceTracker::default();
-        for (i, line) in ctx.doc.body.split('\n').enumerate() {
-            if !fences.scan_line(line) {
-                continue;
-            }
-            for target in line_targets(line) {
-                // Resolved lexically, so deciding whether a reference escapes
-                // the tree costs no filesystem access of its own.
-                let resolved = ctx.abs_path(&dir.join(&target));
-                if !resolved.starts_with(&root) {
-                    continue;
-                }
-                sink.applies();
-                if std::fs::metadata(&resolved).is_err() {
-                    sink.error(
-                        offset + i + 1,
-                        format!("referenced file {target:?} does not exist"),
-                    );
-                }
+        for r in scan(ctx.doc, &ctx.target.path, &root, |p| ctx.abs_path(p)) {
+            sink.applies();
+            if r.missing {
+                sink.error(
+                    r.line,
+                    format!("referenced file {:?} does not exist", r.target),
+                );
             }
         }
     }
 }
 
-/// The checkable file references on one line, deduplicated so a link and a
-/// code span naming the same target report once.
-fn line_targets(line: &str) -> Vec<String> {
+/// One checkable reference inside the linted tree.
+pub(crate) struct Reference {
+    /// The 1-based line in the file, front matter included.
+    pub line: usize,
+    pub target: String,
+    /// Where `target` sits on its line, as byte ranges into the body line:
+    /// one per place it was written, since a link and a code span naming the
+    /// same file report once but both have to be rewritten by `--fix`.
+    pub spans: Vec<Range<usize>>,
+    pub missing: bool,
+}
+
+/// Every checkable reference in `doc`'s body that resolves inside `root`.
+/// Shared by the rule and by `--fix`, so the two cannot disagree about what
+/// counts as a reference. `abs` makes a path absolute and lexically clean.
+pub(crate) fn scan(
+    doc: &Document,
+    path: &str,
+    root: &Path,
+    abs: impl Fn(&Path) -> PathBuf,
+) -> Vec<Reference> {
+    let dir = Path::new(path).parent().unwrap_or_else(|| Path::new(""));
+    let offset = if doc.frontmatter.present {
+        doc.frontmatter.end_line
+    } else {
+        0
+    };
+
+    let mut refs = Vec::new();
+    let mut fences = FenceTracker::default();
+    for (i, line) in doc.body.split('\n').enumerate() {
+        if !fences.scan_line(line) {
+            continue;
+        }
+        for (target, spans) in line_targets(line) {
+            // Resolved lexically, so deciding whether a reference escapes
+            // the tree costs no filesystem access of its own.
+            let resolved = abs(&dir.join(&target));
+            if !resolved.starts_with(root) {
+                continue;
+            }
+            refs.push(Reference {
+                line: offset + i + 1,
+                missing: std::fs::metadata(&resolved).is_err(),
+                target,
+                spans,
+            });
+        }
+    }
+    refs
+}
+
+/// The checkable file references on one line with where each was written,
+/// deduplicated so a link and a code span naming the same target report once.
+fn line_targets(line: &str) -> Vec<(String, Vec<Range<usize>>)> {
     let masked = mask_code_spans(line);
-    let mut targets: Vec<String> = Vec::new();
+    let mut targets: Vec<(String, Vec<Range<usize>>)> = Vec::new();
+    let mut push = |target: String, start: usize| {
+        let span = start..start + target.len();
+        match targets.iter_mut().find(|(t, _)| *t == target) {
+            Some((_, spans)) => spans.push(span),
+            None => targets.push((target, vec![span])),
+        }
+    };
     for caps in LINK_RE.captures_iter(&masked) {
-        if let Some(target) = link_target_path(&caps[1]) {
-            targets.push(target);
+        let raw = caps.get(1).unwrap();
+        if let Some(target) = link_target_path(raw.as_str()) {
+            // The path is a prefix of the target once whitespace and any `<`
+            // are stripped, so its first occurrence is where it was written.
+            let at = raw.as_str().find(&target).unwrap_or(0);
+            push(target, raw.start() + at);
         }
     }
     for caps in CODE_SPAN_RE.captures_iter(line) {
-        if let Some(target) = code_span_target_path(&caps[1])
-            && !targets.contains(&target)
-        {
-            targets.push(target);
+        let raw = caps.get(1).unwrap();
+        if let Some(target) = code_span_target_path(raw.as_str()) {
+            let lead = raw.as_str().len() - raw.as_str().trim_start().len();
+            push(target, raw.start() + lead);
         }
     }
     targets
@@ -104,12 +149,11 @@ fn line_targets(line: &str) -> Vec<String> {
 ///
 /// The filler is `*` because `link_target_path` already rejects it: a masked
 /// span sitting in a link's target position is then dropped, not reported as a
-/// missing file named `****`.
+/// missing file named `****`. One filler per byte, not per character, so byte
+/// offsets into the masked line still point into the original.
 fn mask_code_spans(line: &str) -> String {
     CODE_SPAN_RE
-        .replace_all(line, |caps: &Captures<'_>| {
-            "*".repeat(caps[0].chars().count())
-        })
+        .replace_all(line, |caps: &Captures<'_>| "*".repeat(caps[0].len()))
         .into_owned()
 }
 
@@ -166,4 +210,25 @@ fn code_span_target_path(raw: &str) -> Option<String> {
         return None;
     }
     Some(target.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_targets_locate_each_reference() {
+        let line = "See [`a`](<./a.md> \"t\"), ` ./b.md ` and [c](./a.md#x).";
+        let found: Vec<(String, Vec<&str>)> = line_targets(line)
+            .into_iter()
+            .map(|(t, spans)| (t, spans.into_iter().map(|s| &line[s]).collect()))
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                ("./a.md".to_string(), vec!["./a.md", "./a.md"]),
+                ("./b.md".to_string(), vec!["./b.md"]),
+            ]
+        );
+    }
 }

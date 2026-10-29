@@ -8,6 +8,7 @@ use crate::config::{
     DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
 };
 use crate::discover;
+use crate::fix;
 use crate::lint;
 use crate::report;
 
@@ -24,7 +25,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// What the command line asked for. The four token budgets are optional so an
 /// unset flag is distinguishable from one set to its default value and the
 /// config file can supply it instead. Run-behavior flags (`strict`, `quiet`,
-/// `format`, `color`) are not configurable via the file, so they keep their
+/// `format`, `color`, `fix`) are not configurable via the file, so they keep their
 /// concrete defaults here.
 struct Flags {
     max_agents_tokens: Option<i64>,
@@ -35,6 +36,7 @@ struct Flags {
     color: String,
     strict: bool,
     quiet: bool,
+    fix: bool,
     show_version: bool,
     list_rules: bool,
     excludes: Vec<String>,
@@ -55,6 +57,7 @@ impl Default for Flags {
             color: "auto".to_string(),
             strict: false,
             quiet: false,
+            fix: false,
             show_version: false,
             list_rules: false,
             excludes: Vec::new(),
@@ -78,6 +81,7 @@ struct Resolved {
     color: String,
     strict: bool,
     quiet: bool,
+    fix: bool,
     excludes: Vec<String>,
     disabled: Vec<String>,
     paths: Vec<String>,
@@ -115,6 +119,7 @@ fn resolve(f: Flags, cfg: config::Settings) -> Resolved {
         color: f.color,
         strict: f.strict,
         quiet: f.quiet,
+        fix: f.fix,
         excludes,
         disabled,
         paths: if f.paths.is_empty() {
@@ -250,6 +255,7 @@ fn parse_flags(args: &[String]) -> Result<ParseOutcome, String> {
             "list-rules" => f.list_rules = true,
             "strict" => f.strict = parse_bool_inline(inline),
             "quiet" => f.quiet = parse_bool_inline(inline),
+            "fix" => f.fix = parse_bool_inline(inline),
             "no-config" => f.no_config = parse_bool_inline(inline),
             "format" => f.format = p.next_value(name, inline)?,
             "color" => f.color = p.next_value(name, inline)?,
@@ -341,10 +347,16 @@ impl Cli {
             }
         };
 
-        let linter = lint::Linter::new(self.lint_config());
-        let mut results = Vec::with_capacity(targets.len());
         // A file can vanish between discovery and linting: skip it, but still fail.
         let mut unreadable = 0usize;
+        // Fixed before linting, so the report describes the files as they now are.
+        let disabled = |rule: &str| self.settings.disabled.iter().any(|d| d == rule);
+        if self.settings.fix && !disabled(lint::RULE_FILE_REFERENCE_MISSING) {
+            unreadable += fix_references(&targets, stderr);
+        }
+
+        let linter = lint::Linter::new(self.lint_config());
+        let mut results = Vec::with_capacity(targets.len());
         for t in &targets {
             match linter.file(t) {
                 Ok(res) => results.push(res),
@@ -373,6 +385,44 @@ impl Cli {
             EXIT_OK
         }
     }
+}
+
+/// Repoints broken file references, saying what changed on stderr so stdout
+/// stays the report alone. Returns how many fixed files could not be written
+/// back.
+fn fix_references(targets: &[discover::Target], stderr: &mut impl Write) -> usize {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let mut fixer = fix::Fixer::new(cwd);
+    let mut failed = 0;
+    for t in targets {
+        match fixer.file(t) {
+            Ok(outcomes) => {
+                for o in outcomes {
+                    let _ = match o {
+                        fix::Outcome::Fixed { line, from, to } => writeln!(
+                            stderr,
+                            "lintmatter: fixed {}:{line}: {from:?} -> {to:?}",
+                            t.path
+                        ),
+                        fix::Outcome::Ambiguous {
+                            line,
+                            target,
+                            candidates,
+                        } => writeln!(
+                            stderr,
+                            "lintmatter: not fixing {}:{line}: {target:?} has {candidates} equally close replacements",
+                            t.path
+                        ),
+                    };
+                }
+            }
+            Err(msg) => {
+                let _ = writeln!(stderr, "lintmatter: {msg}");
+                failed += 1;
+            }
+        }
+    }
+    failed
 }
 
 /// Executes lintmatter and returns the process exit code. Findings go to stdout;
@@ -498,6 +548,7 @@ Flags:
   --no-config                           ignore any config file
   --strict                              treat warnings as errors
   --quiet                               report errors only
+  --fix                                 repoint each broken file reference at the closest file of the same name
   --format text|json                    output format (default "text")
   --color auto|always|never             colorize and decorate text output (default "auto")
   --list-rules                          print every rule id and exit

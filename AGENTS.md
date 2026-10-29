@@ -22,7 +22,7 @@ cargo test --workspace
   tests drive the whole CLI in-process. The four token-budget
   fields on `Flags` are `Option`s so an unset flag can fall through to the
   config file; `resolve` merges flags over the file over the defaults. Run
-  behavior (`strict`, `quiet`, `format`, `color`) is flag-only and does not
+  behavior (`strict`, `quiet`, `format`, `color`, `fix`) is flag-only and does not
   go through the config file.
 - `src/config.rs` — the `.lintmatter.yaml` loader and its discovery walk. Only
   budgets, `exclude` and `rules` are configurable there; see the module doc
@@ -32,6 +32,9 @@ cargo test --workspace
 - `src/parse.rs` — `Document::parse` splits YAML front matter from the body,
   keeping line numbers. `Document::mapping` is `Some` only when the block is
   usable, which is how rules short-circuit on a malformed one.
+- `src/fix.rs` — `--fix`: repoints broken references at the closest same-named
+  file in the tree, before linting. Finds them with `references::scan`, the
+  rule's own scanner, so the two agree on what a reference is.
 - `src/fence.rs` — `FenceTracker`, so fenced code blocks can be skipped.
 - `src/tokens.rs` — heuristic token estimator behind the `Counter` trait.
 - `src/lint/` — `Linter` measures token counts, then runs every registered

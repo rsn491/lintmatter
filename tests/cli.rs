@@ -582,3 +582,63 @@ fn no_paths_defaults_to_current_directory() {
     assert_eq!(code_default, code_dot);
     assert_eq!(stdout_default, stdout_dot);
 }
+
+/// A skill whose helper moved into `scripts/`, in a fresh tree `--fix` may
+/// rewrite. Returns the tree and the skill's path.
+fn moved_helper_tree() -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let skill_dir = dir.path().join("skills/moved");
+    std::fs::create_dir_all(skill_dir.join("scripts")).unwrap();
+    std::fs::write(skill_dir.join("scripts/helper.sh"), "").unwrap();
+    let skill = skill_dir.join("SKILL.md");
+    std::fs::write(
+        &skill,
+        "---\nname: moved\ndescription: Use this skill when a fixture needs a helper.\n---\nRun [helper](./helper.sh).\n",
+    )
+    .unwrap();
+    (dir, skill)
+}
+
+#[test]
+fn fix_repoints_broken_references() {
+    let (dir, skill) = moved_helper_tree();
+    let root = dir.path().to_string_lossy().to_string();
+
+    // Without --fix the file is reported and left alone.
+    let before = std::fs::read_to_string(&skill).unwrap();
+    let (code, stdout, _) = run_args(&[&root]);
+    assert_eq!(code, EXIT_FINDINGS, "{stdout}");
+    assert_eq!(std::fs::read_to_string(&skill).unwrap(), before);
+
+    let (code, stdout, stderr) = run_args(&["--fix", "--format", "json", &root]);
+    assert_eq!(code, EXIT_OK, "stdout={stdout} stderr={stderr}");
+    assert!(
+        stderr.contains(r#"fixed "#)
+            && stderr.contains(r#""./helper.sh" -> "./scripts/helper.sh""#),
+        "{stderr}"
+    );
+    // The report on stdout stays machine-readable.
+    serde_json::from_str::<serde_json::Value>(&stdout).unwrap();
+    assert!(
+        std::fs::read_to_string(&skill)
+            .unwrap()
+            .contains("[helper](./scripts/helper.sh)")
+    );
+}
+
+#[test]
+fn fix_respects_a_disabled_reference_rule() {
+    let (dir, skill) = moved_helper_tree();
+    let before = std::fs::read_to_string(&skill).unwrap();
+    let root = dir.path().to_string_lossy().to_string();
+
+    let (code, _, stderr) = run_args(&[
+        "--fix",
+        "--disable",
+        lint::RULE_FILE_REFERENCE_MISSING,
+        &root,
+    ]);
+    assert_eq!(code, EXIT_OK, "{stderr}");
+    assert!(stderr.is_empty(), "{stderr}");
+    assert_eq!(std::fs::read_to_string(&skill).unwrap(), before);
+}

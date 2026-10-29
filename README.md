@@ -82,6 +82,15 @@ lintmatter --strict --format json .
 | `tokens.description` | error | `description` within its token budget |
 | `file-reference.missing` | error | Every relative markdown link outside inline code, and every `./`- or `../`-prefixed file path in inline code, resolves to a file that exists |
 
+Broken file references can be repaired with `--fix`: each one is repointed at
+the file of the same name (matched exactly, case included) that sits closest to
+the referencing file within the linted tree. A reference with two equally close
+candidates is left as is and still reported. Each change is printed to stderr,
+and the report that follows describes the fixed files:
+```sh
+lintmatter --fix .
+```
+
 Switch any of them off by id:
 ```sh
 lintmatter --disable name.dir-mismatch --disable frontmatter.unknown-key .

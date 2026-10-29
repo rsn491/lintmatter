@@ -37,11 +37,11 @@ pub struct Target {
 }
 
 /// Recursion limit, so a pathological layout cannot exhaust the stack.
-const MAX_DEPTH: usize = 64;
+pub(crate) const MAX_DEPTH: usize = 64;
 
 /// Never walked: holds dependencies and build output, whose instruction files
 /// are not the user's to fix.
-const SKIP_DIRS: &[&str] = &[
+pub(crate) const SKIP_DIRS: &[&str] = &[
     ".git",
     ".next",
     ".venv",
