@@ -36,6 +36,11 @@ cargo test --workspace
 - `src/lint/` — `Linter` measures token counts, then runs every registered
   rule. `rule.rs` holds the `Rule` trait; `rules/` holds one struct per rule id
   and `rules::all()`, the registry.
+  `mod.rs` is the module list and `RULES`; `ids.rs` the rule id constants,
+  `finding.rs` the output types, `score.rs` the `Part` mapping and scoring,
+  `sink.rs` `FindingSink`, `context.rs` `FileContext`, `linter.rs` `Linter`.
+  Tests live in `tests/`, grouped by subject, with shared helpers in
+  `tests/mod.rs`.
 - `src/report/` — the `Report` trait with `TextReporter` and `JsonReporter`.
 - `src/utils.rs` — helpers belonging to no module: `humanize`, `plural`,
   `to_slash`, `clean_path`, `ceil_div`.
@@ -48,12 +53,12 @@ cargo test --workspace
 
 ## Adding a rule
 
-1. Add its id constant in `src/lint/mod.rs`, then a struct implementing `Rule`
+1. Add its id constant in `src/lint/ids.rs`, then a struct implementing `Rule`
    in the matching `src/lint/rules/` module. Emit through `FindingSink::error`
    or `warn`; the sink knows which rule is running and handles `--strict`.
    Override `applies_to` if the rule judges AGENTS.md too — the default is
    SKILL.md only.
-2. Give it a `Part` in `lint/mod.rs`'s `part`, and call `FindingSink::applies`
+2. Give it a `Part` in `lint/score.rs`'s `part`, and call `FindingSink::applies`
    at the point in `check` where the rule's precondition holds, ahead of the
    condition that fires it, so the rule lands in the score's denominator
    whether or not it fires. Call it only where the rule really had something
@@ -64,7 +69,7 @@ cargo test --workspace
    That order is the only place report order is written down: it drives
    `RULES`, `--list-rules`, `--disable` validation, the config file's `rules:`
    mapping, and the order findings appear in.
-4. Add a case to the table in `lint/mod.rs`'s test module asserting the exact
+4. Add a case to the table in `lint/tests/skill.rs`'s `skill_frontmatter_rules` asserting the exact
    rule ids the fixture produces.
 5. Document it in the README's rule table. Nothing else is needed for
    `--disable` or the config file's `rules:` mapping: both validate against
