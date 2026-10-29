@@ -279,6 +279,14 @@ impl FileContext<'_> {
     }
 }
 
+/// A target that vanished or became unreadable after discovery.
+#[derive(Debug, thiserror::Error)]
+#[error("cannot read {path}: {source}")]
+pub struct ReadError {
+    path: String,
+    source: std::io::Error,
+}
+
 /// Applies [`Config`]'s rules using a token [`Counter`].
 pub struct Linter {
     cfg: Config,
@@ -312,8 +320,11 @@ impl Linter {
     }
 
     /// Reads and lints one target.
-    pub fn file(&self, t: &Target) -> Result<FileResult, String> {
-        let src = std::fs::read(&t.path).map_err(|e| format!("cannot read {}: {e}", t.path))?;
+    pub fn file(&self, t: &Target) -> Result<FileResult, ReadError> {
+        let src = std::fs::read(&t.path).map_err(|source| ReadError {
+            path: t.path.clone(),
+            source,
+        })?;
         Ok(self.check(t, &src))
     }
 

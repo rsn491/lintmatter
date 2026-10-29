@@ -29,6 +29,14 @@ const INVALID_URL_ERROR: &str = "That doesn't look like a valid GitHub repositor
 const INVALID_BUDGET_ERROR: &str =
     "Token budgets must be whole numbers from 0 to 1000000 (0 turns that check off).";
 
+/// A budget outside the range the server will pass to `lintmatter`.
+#[derive(Debug, thiserror::Error)]
+#[error("{flag} is {n}, outside 0..={MAX_BUDGET}")]
+struct BudgetError {
+    flag: &'static str,
+    n: i64,
+}
+
 /// The token budgets a run enforces, named after the flags they become.
 ///
 /// Every field is optional, and an omitted one is not passed to `lintmatter` at
@@ -71,11 +79,11 @@ impl Budgets {
         ]
     }
 
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self) -> Result<(), BudgetError> {
         for (flag, value) in self.entries() {
             let Some(n) = value else { continue };
             if !(0..=MAX_BUDGET).contains(&n) {
-                return Err(format!("{flag} is {n}, outside 0..={MAX_BUDGET}"));
+                return Err(BudgetError { flag, n });
             }
         }
         Ok(())
@@ -182,6 +190,17 @@ async fn handle_lint_inner(req: LintRequest) -> Result<Json<Value>, ApiError> {
     Ok(Json(report))
 }
 
+/// Why a URL was refused before reaching `git clone`.
+#[derive(Debug, thiserror::Error)]
+enum UrlError {
+    #[error("URL must start with https://github.com/")]
+    Prefix,
+    #[error("URL must look like https://github.com/<owner>/<repo>")]
+    Shape,
+    #[error("owner/repo contains invalid characters")]
+    Chars,
+}
+
 /// Accepts only `https://github.com/<owner>/<repo>[.git][/]`, rejecting
 /// anything else. This is a security boundary as much as a UX one: git
 /// supports transports like `ext::` that can execute arbitrary commands, so
@@ -189,16 +208,16 @@ async fn handle_lint_inner(req: LintRequest) -> Result<Json<Value>, ApiError> {
 /// a canonicalized clone URL rebuilt from the validated parts (rather than
 /// the raw input) so stray query strings, fragments, or credentials in the
 /// original can't slip through.
-fn validate_github_url(raw: &str) -> Result<String, String> {
+fn validate_github_url(raw: &str) -> Result<String, UrlError> {
     let trimmed = raw.trim();
     let without_slash = trimmed.strip_suffix('/').unwrap_or(trimmed);
     let rest = without_slash
         .strip_prefix("https://github.com/")
-        .ok_or("URL must start with https://github.com/")?;
+        .ok_or(UrlError::Prefix)?;
 
     let parts: Vec<&str> = rest.split('/').collect();
     let [owner, repo] = parts[..] else {
-        return Err("URL must look like https://github.com/<owner>/<repo>".to_string());
+        return Err(UrlError::Shape);
     };
     let repo = repo.strip_suffix(".git").unwrap_or(repo);
 
@@ -208,7 +227,7 @@ fn validate_github_url(raw: &str) -> Result<String, String> {
                 .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
     };
     if !valid_segment(owner) || !valid_segment(repo) {
-        return Err("owner/repo contains invalid characters".to_string());
+        return Err(UrlError::Chars);
     }
 
     Ok(format!("https://github.com/{owner}/{repo}"))
@@ -291,18 +310,18 @@ fn lintmatter_binary_path() -> PathBuf {
     PathBuf::from(name)
 }
 
-fn bad_request(log_detail: impl Into<String>, public_message: &'static str) -> ApiError {
+fn bad_request(log_detail: impl ToString, public_message: &'static str) -> ApiError {
     ApiError {
         status: StatusCode::BAD_REQUEST,
-        log_detail: log_detail.into(),
+        log_detail: log_detail.to_string(),
         public_message,
     }
 }
 
-fn server_error(log_detail: impl Into<String>) -> ApiError {
+fn server_error(log_detail: impl ToString) -> ApiError {
     ApiError {
         status: StatusCode::INTERNAL_SERVER_ERROR,
-        log_detail: log_detail.into(),
+        log_detail: log_detail.to_string(),
         public_message: GENERIC_ERROR,
     }
 }
@@ -374,7 +393,8 @@ mod tests {
                 ..Budgets::default()
             }
             .validate()
-            .unwrap_err();
+            .unwrap_err()
+            .to_string();
             assert!(err.contains("--max-agents-tokens"), "{err}");
         }
     }

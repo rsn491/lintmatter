@@ -61,6 +61,20 @@ enum ColorChoice {
     Never,
 }
 
+/// Why a run could not start: a bad flag, or a setting that does not resolve.
+#[derive(Debug, thiserror::Error)]
+enum CliError {
+    #[error("unknown rule {} in --disable: run --list-rules to see them all", quote_all(.0))]
+    UnknownRules(Vec<String>),
+    #[error(transparent)]
+    Config(#[from] config::ConfigError),
+}
+
+fn quote_all(items: &[String]) -> String {
+    let quoted: Vec<String> = items.iter().map(|r| format!("{r:?}")).collect();
+    quoted.join(", ")
+}
+
 /// What the command line asked for. The four token budgets are optional so an
 /// unset flag is distinguishable from one set to its default value and the
 /// config file can supply it instead. Run-behavior flags (`strict`, `quiet`,
@@ -191,15 +205,15 @@ fn resolve(f: Flags, cfg: config::Settings) -> Resolved {
 /// Finds the config file for this run: the one named by `--config`, or the
 /// nearest `.lintmatter.yaml` at or above the working directory. `--no-config`
 /// skips the search, and finding nothing is not an error.
-fn load_config(f: &Flags, cwd: &Path) -> Result<config::Settings, String> {
+fn load_config(f: &Flags, cwd: &Path) -> Result<config::Settings, CliError> {
     if let Some(path) = &f.config {
-        return config::load(Path::new(path));
+        return Ok(config::load(Path::new(path))?);
     }
     if f.no_config {
         return Ok(config::Settings::default());
     }
     match config::discover(cwd) {
-        Some(path) => config::load(&path),
+        Some(path) => Ok(config::load(&path)?),
         None => Ok(config::Settings::default()),
     }
 }
@@ -209,7 +223,7 @@ struct Cli {
 }
 
 impl Cli {
-    fn new(f: Flags, cwd: &Path) -> Result<Self, String> {
+    fn new(f: Flags, cwd: &Path) -> Result<Self, CliError> {
         // Checked before the config is read so the error names the typed flag.
         check_rule_names(&f.disabled)?;
         let file_cfg = load_config(&f, cwd)?;
@@ -349,21 +363,18 @@ fn resolve_color(choice: ColorChoice, is_terminal: bool) -> bool {
 }
 
 /// Rejects typos in `--disable` rather than silently doing nothing.
-fn check_rule_names(rules: &[String]) -> Result<(), String> {
+fn check_rule_names(rules: &[String]) -> Result<(), CliError> {
     let known: std::collections::HashSet<&str> = lint::RULES.iter().copied().collect();
-    let mut unknown: Vec<&String> = rules
+    let mut unknown: Vec<String> = rules
         .iter()
         .filter(|r| !known.contains(r.as_str()))
+        .cloned()
         .collect();
     if unknown.is_empty() {
         return Ok(());
     }
     unknown.sort();
-    let quoted: Vec<String> = unknown.iter().map(|r| format!("{r:?}")).collect();
-    Err(format!(
-        "unknown rule {} in --disable: run --list-rules to see them all",
-        quoted.join(", ")
-    ))
+    Err(CliError::UnknownRules(unknown))
 }
 
 #[cfg(test)]

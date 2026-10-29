@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 
 use glob::Pattern;
@@ -22,6 +23,29 @@ impl std::fmt::Display for Kind {
             Kind::Agents => write!(f, "agents"),
             Kind::Skill => write!(f, "skill"),
         }
+    }
+}
+
+/// Why discovery could not produce a target list.
+#[derive(Debug, thiserror::Error)]
+pub enum DiscoverError {
+    #[error("cannot read {}: {source}", path.display())]
+    Read { path: PathBuf, source: io::Error },
+    #[error("{} is not an AGENTS.md or SKILL.md", .0.display())]
+    NotInstructionFile(PathBuf),
+    #[error("{} is more than {MAX_DEPTH} directories deep: refusing to recurse further", .0.display())]
+    TooDeep(PathBuf),
+    #[error("invalid exclude pattern {pattern:?}: {source}")]
+    BadExclude {
+        pattern: String,
+        source: glob::PatternError,
+    },
+}
+
+fn read_err(path: &Path) -> impl FnOnce(io::Error) -> DiscoverError + '_ {
+    move |source| DiscoverError::Read {
+        path: path.to_path_buf(),
+        source,
     }
 }
 
@@ -70,7 +94,7 @@ pub fn kind_for(path: &Path) -> Option<Kind> {
 ///
 /// The result is deduplicated by absolute path and sorted, so output is
 /// stable across runs.
-pub fn find(paths: &[String], excludes: &[String]) -> Result<Vec<Target>, String> {
+pub fn find(paths: &[String], excludes: &[String]) -> Result<Vec<Target>, DiscoverError> {
     let mut d = Discoverer::new(compile_globs(excludes)?);
     d.collect(paths)?;
     Ok(d.finish())
@@ -99,11 +123,10 @@ impl Discoverer {
     }
 
     /// Adds every target under `paths`.
-    fn collect(&mut self, paths: &[String]) -> Result<(), String> {
+    fn collect(&mut self, paths: &[String]) -> Result<(), DiscoverError> {
         for path in paths {
             let path = Path::new(path);
-            let meta =
-                fs::metadata(path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+            let meta = fs::metadata(path).map_err(read_err(path))?;
             if meta.is_dir() {
                 self.walk(path, path, 0)?;
                 continue;
@@ -113,12 +136,7 @@ impl Discoverer {
             let root = path.parent().unwrap_or(Path::new("."));
             match kind_for(path) {
                 Some(kind) => self.add(path, kind, root),
-                None => {
-                    return Err(format!(
-                        "{} is not an AGENTS.md or SKILL.md",
-                        path.display()
-                    ));
-                }
+                None => return Err(DiscoverError::NotInstructionFile(path.to_path_buf())),
             }
         }
         Ok(())
@@ -141,24 +159,19 @@ impl Discoverer {
         }
     }
 
-    fn walk(&mut self, root: &Path, dir: &Path, depth: usize) -> Result<(), String> {
+    fn walk(&mut self, root: &Path, dir: &Path, depth: usize) -> Result<(), DiscoverError> {
         if depth > MAX_DEPTH {
-            return Err(format!(
-                "{} is more than {MAX_DEPTH} directories deep: refusing to recurse further",
-                dir.display()
-            ));
+            return Err(DiscoverError::TooDeep(dir.to_path_buf()));
         }
         let mut entries: Vec<_> = fs::read_dir(dir)
-            .map_err(|e| format!("cannot read {}: {e}", dir.display()))?
+            .map_err(read_err(dir))?
             .collect::<Result<_, _>>()
-            .map_err(|e: std::io::Error| format!("cannot read {}: {e}", dir.display()))?;
+            .map_err(read_err(dir))?;
         entries.sort_by_key(|e| e.file_name());
 
         for entry in entries {
             let path = entry.path();
-            let file_type = entry
-                .file_type()
-                .map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+            let file_type = entry.file_type().map_err(read_err(&path))?;
             let name = entry.file_name();
             let name = name.to_string_lossy();
             let rel = || to_slash(path.strip_prefix(root).unwrap_or(&path));
@@ -196,10 +209,15 @@ fn matches_any(patterns: &[Pattern], name: &str, rel: &str) -> bool {
 /// Rejects malformed patterns up front rather than silently matching nothing
 /// on every path. The message names no flag because an exclude can come from
 /// `--exclude` or from the config file's `exclude:`.
-fn compile_globs(globs: &[String]) -> Result<Vec<Pattern>, String> {
+fn compile_globs(globs: &[String]) -> Result<Vec<Pattern>, DiscoverError> {
     globs
         .iter()
-        .map(|g| Pattern::new(g).map_err(|e| format!("invalid exclude pattern {g:?}: {e}")))
+        .map(|g| {
+            Pattern::new(g).map_err(|source| DiscoverError::BadExclude {
+                pattern: g.clone(),
+                source,
+            })
+        })
         .collect()
 }
 
@@ -360,7 +378,8 @@ mod tests {
             &[dir.path().join("README.md").to_string_lossy().to_string()],
             &[],
         )
-        .unwrap_err();
+        .unwrap_err()
+        .to_string();
         assert!(err.contains("not an AGENTS.md or SKILL.md"), "{err}");
 
         assert!(
@@ -375,7 +394,8 @@ mod tests {
             &[dir.path().to_string_lossy().to_string()],
             &["[".to_string()],
         )
-        .unwrap_err();
+        .unwrap_err()
+        .to_string();
         assert!(err.contains("invalid exclude"), "{err}");
     }
 
@@ -386,7 +406,9 @@ mod tests {
         fs::create_dir_all(dir.path().join(&deep)).unwrap();
         fs::write(dir.path().join(&deep).join("AGENTS.md"), "too deep").unwrap();
 
-        let err = find(&[dir.path().to_string_lossy().to_string()], &[]).unwrap_err();
+        let err = find(&[dir.path().to_string_lossy().to_string()], &[])
+            .unwrap_err()
+            .to_string();
         assert!(err.contains("directories deep"), "{err}");
 
         let ok_dir = tempfile::tempdir().unwrap();
