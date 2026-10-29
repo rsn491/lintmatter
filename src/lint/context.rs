@@ -1,5 +1,3 @@
-//! What a rule may look at for one file.
-
 use std::path::{Path, PathBuf};
 
 use crate::config::Config;

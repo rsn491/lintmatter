@@ -1,5 +1,3 @@
-//! What a lint run produces for each file.
-
 use crate::discover::Kind;
 
 /// Marks how a finding affects the exit code.
@@ -51,7 +49,7 @@ pub struct FileResult {
     pub path: String,
     pub kind: Kind,
     pub tokens: Counts,
-    /// How well the file rates, 0 to 100. See the `score` module.
+    /// How well the file rates, 0 to 100.
     pub score: u8,
     pub findings: Vec<Finding>,
 }

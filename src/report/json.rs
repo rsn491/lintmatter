@@ -93,7 +93,7 @@ impl Report for JsonReporter {
 mod tests {
     use super::*;
     use crate::report::summarize;
-    use crate::report::test_support::results;
+    use crate::report::test_utils::results;
 
     fn render_json(results: &[FileResult], quiet: bool) -> Vec<u8> {
         let mut buf = Vec::new();

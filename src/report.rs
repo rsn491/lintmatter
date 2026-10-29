@@ -4,7 +4,7 @@ mod json;
 mod reporter;
 mod summary;
 #[cfg(test)]
-mod test_support;
+mod test_utils;
 mod text;
 
 pub use json::{JsonReporter, SCHEMA_VERSION};

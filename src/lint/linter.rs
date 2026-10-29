@@ -1,5 +1,3 @@
-//! Runs every registered rule over a file.
-
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -138,7 +136,7 @@ mod tests {
         DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
     };
     use crate::lint::ids::*;
-    use crate::lint::test_support::*;
+    use crate::lint::test_utils::*;
     use std::fs;
     use std::path::Path;
 

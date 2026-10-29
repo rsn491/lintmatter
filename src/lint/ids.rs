@@ -1,5 +1,3 @@
-//! Rule ids and the limits they enforce.
-
 use std::sync::LazyLock;
 
 use super::rules;

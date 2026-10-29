@@ -1,5 +1,3 @@
-//! Fixtures shared by the report module's tests.
-
 use crate::discover::Kind;
 use crate::lint::{Counts, FileResult, Finding, Severity};
 

@@ -9,7 +9,7 @@ pub mod rules;
 mod score;
 mod sink;
 #[cfg(test)]
-mod test_support;
+mod test_utils;
 
 pub use context::FileContext;
 pub use finding::{Counts, FileResult, Finding, Severity};

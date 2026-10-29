@@ -1,5 +1,3 @@
-//! Rates a file from 0 to 100.
-
 use crate::config::Config;
 use crate::discover::Kind;
 
@@ -73,7 +71,7 @@ fn budget_score(count: usize, limit: i64) -> f64 {
 mod tests {
     use crate::lint::Linter;
     use crate::lint::ids::*;
-    use crate::lint::test_support::*;
+    use crate::lint::test_utils::*;
 
     #[test]
     fn frontmatter_score() {

@@ -1,5 +1,3 @@
-//! The rule registry.
-//!
 //! `ALL`'s order is the one place report order is written down. It backs
 //! `--list-rules`, `--disable` validation, and the order findings appear in a
 //! report, so adding a rule means adding its struct here at the position it

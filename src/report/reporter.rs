@@ -1,5 +1,3 @@
-//! The interface every output format implements.
-
 use std::io::{self, Write};
 
 use crate::lint::{FileResult, Finding, Severity};

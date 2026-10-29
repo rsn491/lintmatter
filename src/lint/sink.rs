@@ -1,5 +1,3 @@
-//! Collects a rule's findings and tracks what it judged, for the score.
-
 use std::collections::HashSet;
 
 use super::finding::{Finding, Severity};

@@ -6,7 +6,6 @@
 //! the default token budgets from here rather than restating numbers that
 //! would then drift.
 
-// A module's index is `foo.rs` beside `foo/`, never `foo/mod.rs`.
 #![warn(clippy::mod_module_files)]
 
 pub mod cli;

@@ -35,17 +35,16 @@ cargo test --workspace
   usable, which is how rules short-circuit on a malformed one.
 - `src/fence.rs` — `FenceTracker`, so fenced code blocks can be skipped.
 - `src/tokens.rs` — heuristic token estimator behind the `Counter` trait.
-- `src/lint.rs` + `src/lint/` — `linter.rs`'s `Linter` measures token counts,
-  then runs every registered rule. `ids.rs` holds the rule ids, `finding.rs`
-  the result types, `sink.rs` `FindingSink` and the score `Part`s, `context.rs`
-  `FileContext`, `score.rs` the per-file score. `rule.rs` holds the `Rule`
-  trait; `rules/` holds one struct per rule id and `registry.rs`'s
-  `rules::all()`, the registry.
-- `src/report.rs` + `src/report/` — the `Report` trait (`reporter.rs`) with
-  `TextReporter` and `JsonReporter`; `summary.rs` totals a run.
+- `src/lint.rs` + `src/lint/` — `Linter` (`linter.rs`) measures token counts,
+  then runs every registered rule: `ids.rs`, `finding.rs`, `sink.rs`,
+  `context.rs`, `score.rs`, `rule.rs` (the `Rule` trait) and `rules/` (one
+  struct per rule id; `registry.rs` holds `rules::all()`).
+- `src/report.rs` + `src/report/` — the `Report` trait with `TextReporter` and
+  `JsonReporter`.
 - `src/utils.rs` — helpers belonging to no module: `humanize`, `plural`,
   `to_slash`, `clean_path`, `ceil_div`.
 - `tests/cli.rs` — end-to-end tests over `testdata/`; unit tests live beside their code.
+  A module's `test_utils.rs` holds fixtures shared by its unit tests.
 - `web/` — the `lintmatter-web` crate: an axum server that clones a GitHub repo
   and runs the `lintmatter` binary over it. It listens on `HOST`/`PORT`
   (default `127.0.0.1:3000`); a container host wants `HOST=0.0.0.0`. `lint.rs`'s
@@ -91,9 +90,8 @@ comment.
 
 ## Conventions
 
-- A module's index is `foo.rs` beside `foo/`, never `foo/mod.rs`
-  (`clippy::mod_module_files` enforces it), and holds only `mod` declarations
-  and `pub use` re-exports. Code and tests live in the files under `foo/`.
+- Modules use `foo.rs` + `foo/`, never `mod.rs` (enforced by
+  `clippy::mod_module_files`); `foo.rs` only declares and re-exports.
 - Prefer errors for anything that breaks a file's contract with the runtime, and
   warnings for stylistic mismatches. Warnings alone exit 0.
 - Findings come out in registry order because the rules run in that order, so

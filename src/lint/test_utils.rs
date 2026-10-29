@@ -1,5 +1,3 @@
-//! Fixtures shared by the lint module's tests.
-
 use std::fs;
 use std::path::Path;
 

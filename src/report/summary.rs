@@ -1,5 +1,3 @@
-//! Totals for a whole run.
-
 use crate::lint::FileResult;
 
 /// Counts a whole run.
@@ -43,7 +41,7 @@ pub fn summarize(results: &[FileResult]) -> Summary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::report::test_support::results;
+    use crate::report::test_utils::results;
 
     #[test]
     fn summarize_totals_across_results() {

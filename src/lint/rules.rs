@@ -1,4 +1,4 @@
-//! One struct per rule id, and the registry that orders them.
+//! Rules and their registry.
 
 pub mod description;
 pub mod frontmatter;
