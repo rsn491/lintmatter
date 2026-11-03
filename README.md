@@ -1,5 +1,7 @@
 # lintmatter
 
+[![codecov](https://codecov.io/gh/rsn491/lintmatter/graph/badge.svg)](https://codecov.io/gh/rsn491/lintmatter)
+
 A linter that checks agent context files such as `AGENTS.md` and `SKILL.md` for proper formatting and best practices.
 
 [Try the demo](https://lintmatter.onrender.com/demo)
