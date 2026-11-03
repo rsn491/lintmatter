@@ -35,13 +35,16 @@ cargo test --workspace
   usable, which is how rules short-circuit on a malformed one.
 - `src/fence.rs` — `FenceTracker`, so fenced code blocks can be skipped.
 - `src/tokens.rs` — heuristic token estimator behind the `Counter` trait.
-- `src/lint/` — `Linter` measures token counts, then runs every registered
-  rule. `rule.rs` holds the `Rule` trait; `rules/` holds one struct per rule id
-  and `rules::all()`, the registry.
-- `src/report/` — the `Report` trait with `TextReporter` and `JsonReporter`.
+- `src/lint.rs` + `src/lint/` — `Linter` (`linter.rs`) measures token counts,
+  then runs every registered rule: `ids.rs`, `finding.rs`, `sink.rs`,
+  `context.rs`, `score.rs`, `rule.rs` (the `Rule` trait) and `rules/` (one
+  struct per rule id; `registry.rs` holds `rules::all()`).
+- `src/report.rs` + `src/report/` — the `Report` trait with `TextReporter` and
+  `JsonReporter`.
 - `src/utils.rs` — helpers belonging to no module: `humanize`, `plural`,
   `to_slash`, `clean_path`, `ceil_div`.
 - `tests/cli.rs` — end-to-end tests over `testdata/`; unit tests live beside their code.
+  A module's `test_utils.rs` holds fixtures shared by its unit tests.
 - `web/` — the `lintmatter-web` crate: an axum server that clones a GitHub repo
   and runs the `lintmatter` binary over it. It listens on `HOST`/`PORT`
   (default `127.0.0.1:3000`); a container host wants `HOST=0.0.0.0`. `lint.rs`'s
@@ -51,23 +54,23 @@ cargo test --workspace
 
 ## Adding a rule
 
-1. Add its id constant in `src/lint/mod.rs`, then a struct implementing `Rule`
+1. Add its id constant in `src/lint/ids.rs`, then a struct implementing `Rule`
    in the matching `src/lint/rules/` module. Emit through `FindingSink::error`
    or `warn`; the sink knows which rule is running and handles `--strict`.
    Override `applies_to` if the rule judges AGENTS.md too — the default is
    SKILL.md only.
-2. Give it a `Part` in `lint/mod.rs`'s `part`, and call `FindingSink::applies`
+2. Give it a `Part` in `lint/sink.rs`'s `part`, and call `FindingSink::applies`
    at the point in `check` where the rule's precondition holds, ahead of the
    condition that fires it, so the rule lands in the score's denominator
    whether or not it fires. Call it only where the rule really had something
    to judge: a check skipped for this file must not count against it.
    `error`/`warn` call it implicitly too, so a rule that fires is always
    counted even if the check site forgot to call `applies` first.
-3. Register it in `rules::all()` **at the position it should be reported**.
-   That order is the only place report order is written down: it drives
+3. Register it in `rules::all()` (`lint/rules/registry.rs`) **at the position
+   it should be reported**. That order is the only place report order is written down: it drives
    `RULES`, `--list-rules`, `--disable` validation, the config file's `rules:`
    mapping, and the order findings appear in.
-4. Add a case to the table in `lint/mod.rs`'s test module asserting the exact
+4. Add a case to the table in `lint/linter.rs`'s test module asserting the exact
    rule ids the fixture produces.
 5. Document it in the README's rule table. Nothing else is needed for
    `--disable` or the config file's `rules:` mapping: both validate against
@@ -87,6 +90,8 @@ comment.
 
 ## Conventions
 
+- Modules use `foo.rs` + `foo/`, never `mod.rs` (enforced by
+  `clippy::mod_module_files`); `foo.rs` only declares and re-exports.
 - Prefer errors for anything that breaks a file's contract with the runtime, and
   warnings for stylistic mismatches. Warnings alone exit 0.
 - Findings come out in registry order because the rules run in that order, so

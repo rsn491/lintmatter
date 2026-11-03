@@ -6,6 +6,8 @@
 //! the default token budgets from here rather than restating numbers that
 //! would then drift.
 
+#![warn(clippy::mod_module_files)]
+
 pub mod cli;
 pub mod config;
 pub mod discover;

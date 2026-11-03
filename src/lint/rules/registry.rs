@@ -1,18 +1,11 @@
-//! The rule registry.
-//!
 //! `ALL`'s order is the one place report order is written down. It backs
 //! `--list-rules`, `--disable` validation, and the order findings appear in a
 //! report, so adding a rule means adding its struct here at the position it
 //! should be reported -- there is no second list to keep in step.
 
-pub mod description;
-pub mod frontmatter;
-pub mod name;
-pub mod references;
-pub mod schema;
-pub mod tokens;
+use crate::lint::rule::Rule;
 
-use super::rule::Rule;
+use super::{description, frontmatter, name, references, schema, tokens};
 
 /// Every rule, in report order.
 static ALL: &[&dyn Rule] = &[
