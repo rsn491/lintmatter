@@ -1,6 +1,12 @@
 # lintmatter
 
+[![CI](https://github.com/rsn491/lintmatter/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rsn491/lintmatter/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/rsn491/lintmatter/graph/badge.svg)](https://codecov.io/gh/rsn491/lintmatter)
+[![crates.io](https://img.shields.io/crates/v/lintmatter.svg)](https://crates.io/crates/lintmatter)
+[![npm](https://img.shields.io/npm/v/lintmatter.svg)](https://www.npmjs.com/package/lintmatter)
+[![GitHub release](https://img.shields.io/github/v/release/rsn491/lintmatter)](https://github.com/rsn491/lintmatter/releases/latest)
+[![MSRV](https://img.shields.io/badge/rustc-1.93+-orange.svg)](Cargo.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A linter that checks agent context files such as `AGENTS.md` and `SKILL.md` for proper formatting and best practices.
 
