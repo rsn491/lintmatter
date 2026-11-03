@@ -1,19 +1,27 @@
 //! lintmatter lints agent instruction files (AGENTS.md and SKILL.md) for
 //! front-matter correctness and token budget overruns.
 //!
-//! `src/main.rs` is a thin wrapper over [`cli::run`]. The library exists so
-//! the other crate in the workspace, `lintmatter-web`, can read settings such as
-//! the default token budgets from here rather than restating numbers that
-//! would then drift.
+//! The crate is laid out as ports and adapters (hexagonal architecture), with
+//! dependencies pointing inward only:
+//!
+//! - [`domain`] is the pure core: the file model, front-matter parsing, token
+//!   estimation, the rules and the scoring. It performs no I/O; the one thing
+//!   a rule must ask of the outside world, whether a path exists, goes through
+//!   the [`domain::lint::PathProbe`] trait.
+//! - [`application`] holds the use cases -- merging settings, running a lint
+//!   over a set of paths -- and the [`application::ports`] they drive.
+//! - [`adapters`] connects those to the real world: the command line, the
+//!   filesystem, the `.lintmatter.yaml` file and the text and JSON reports.
+//!
+//! `tests/architecture.rs` enforces the direction. `src/main.rs` is a thin
+//! wrapper over [`adapters::cli::run`]. The library exists so the other crate
+//! in the workspace, `lintmatter-web`, can read settings such as the default
+//! token budgets from here rather than restating numbers that would then
+//! drift.
 
 #![warn(clippy::mod_module_files)]
 
-pub mod cli;
-pub mod config;
-pub mod discover;
-pub mod fence;
-pub mod lint;
-pub mod parse;
-pub mod report;
-pub mod tokens;
+pub mod adapters;
+pub mod application;
+pub mod domain;
 pub mod utils;

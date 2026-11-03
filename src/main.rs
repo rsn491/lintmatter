@@ -6,7 +6,7 @@ use std::io::IsTerminal;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let is_terminal = std::io::stdout().is_terminal();
-    let code = lintmatter::cli::run(
+    let code = lintmatter::adapters::cli::run(
         &args,
         &mut std::io::stdout(),
         &mut std::io::stderr(),
