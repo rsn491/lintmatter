@@ -77,9 +77,10 @@ pub fn resolve(flags: Settings, file: Settings, strict: bool, paths: Vec<String>
     }
 }
 
-/// `--disable` named rules that do not exist.
+/// Rules asked to be disabled that do not exist. The message names no source:
+/// only the caller knows whether the names came from a flag or elsewhere.
 #[derive(Debug, thiserror::Error)]
-#[error("unknown rule {} in --disable: run --list-rules to see them all", quote_all(.0))]
+#[error("unknown rule {}", quote_all(.0))]
 pub struct UnknownRules(pub Vec<String>);
 
 fn quote_all(items: &[String]) -> String {
@@ -87,7 +88,8 @@ fn quote_all(items: &[String]) -> String {
     quoted.join(", ")
 }
 
-/// Rejects typos in `--disable` rather than silently doing nothing.
+/// Rejects typos in a list of rules to disable rather than silently doing
+/// nothing.
 pub fn check_rule_names(rules: &[String]) -> Result<(), UnknownRules> {
     let known: HashSet<&str> = RULES.iter().copied().collect();
     let mut unknown: Vec<String> = rules
@@ -144,9 +146,6 @@ mod tests {
     fn unknown_rules_are_sorted_and_quoted() {
         assert!(check_rule_names(&["name.format".into()]).is_ok());
         let err = check_rule_names(&["zz".into(), "aa".into()]).unwrap_err();
-        assert_eq!(
-            err.to_string(),
-            "unknown rule \"aa\", \"zz\" in --disable: run --list-rules to see them all"
-        );
+        assert_eq!(err.to_string(), "unknown rule \"aa\", \"zz\"");
     }
 }

@@ -10,7 +10,7 @@ mod sink;
 #[cfg(test)]
 mod test_utils;
 
-pub use context::{FileContext, PathProbe};
+pub use context::FileContext;
 pub use ids::*;
 pub use linter::Linter;
 pub use sink::FindingSink;

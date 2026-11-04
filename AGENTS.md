@@ -15,9 +15,10 @@ cargo test --workspace
 ## Layout
 
 Ports and adapters: dependencies point inward only, `adapters` → `application`
-→ `domain`. `tests/architecture.rs` enforces this (test code is exempt):
-`domain` may not name `application`, `adapters`, `std::fs`, `std::env`, `clap`
-or `glob`, and `application` may not name any of those but itself.
+→ `domain`. `tests/architecture.rs` parses each file and enforces this (test
+code is exempt): `domain` names only itself and `utils`, `utils` nothing,
+`application` adds `domain`; none touch `std::fs`/`env`/`process`/`net`/`thread`,
+and each has an allowlist of `[dependencies]` crates.
 
 - `src/main.rs` calls `adapters::cli::run`. `src/lib.rs` lists the layers; the
   crate is also a library so `web/` reads the default budgets
@@ -27,16 +28,18 @@ or `glob`, and `application` may not name any of those but itself.
   `finding.rs`, `summary.rs`, `config.rs` (`Config`, `DEFAULT_MAX_*`).
   `document.rs` (`Document::parse`; `mapping` is `Some` only when the front
   matter is usable), `fence.rs`, `tokens.rs` (`Counter`). `lint/` is the rules
-  engine: `Linter` is handed its cwd and a `PathProbe` (`context.rs`), plus
+  engine: `Linter` is handed its cwd and a `PathProbe` (`domain/ports.rs`), plus
   `ids`, `sink`, `score`, `rule` (the `Rule` trait) and `rules/` (one struct
   per rule id; `registry.rs` holds `rules::all()`).
-- `src/application/` — use cases. `ports.rs` (`SourceReader`, `TargetFinder`);
+- `src/application/` — use cases. `ports.rs` (`SourceReader`, `TargetFinder`,
+  and `PathProbe` re-exported);
   `settings.rs` (`Settings`, `resolve`: flag over file over default,
   `check_rule_names`); `lint_run.rs` (`LintRun` → `Outcome`).
 - `src/adapters/` — `cli.rs` (clap `Flags`, exit codes, composition root;
   `run` takes its writers so tests drive it in-process), `config_file.rs`
   (`.lintmatter.yaml` loader and discovery), `discover.rs` (`FsDiscoverer`),
   `fs.rs` (`LocalFs`), `report/` (`Report`, `TextReporter`, `JsonReporter`).
+  The JSON shape lives only in `report/json.rs`; domain types carry no `serde`.
 - Tests: `tests/cli.rs` runs end to end over `testdata/`; unit tests sit beside
   their code, with shared fixtures in a module's `test_utils.rs`.
 - `web/` — the `lintmatter-web` axum server: clones a GitHub repo and runs the

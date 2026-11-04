@@ -3,8 +3,7 @@
 use std::io;
 use std::path::Path;
 
-use crate::application::SourceReader;
-use crate::domain::lint::PathProbe;
+use crate::application::{PathProbe, SourceReader};
 
 /// Reads files and checks paths on the machine lintmatter runs on.
 #[derive(Debug, Clone, Copy, Default)]

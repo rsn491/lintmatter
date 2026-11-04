@@ -3,9 +3,9 @@ use std::path::PathBuf;
 
 use crate::domain::document::Document;
 use crate::domain::tokens::{self, Counter};
-use crate::domain::{Config, Counts, FileResult, Kind, Target};
+use crate::domain::{Config, Counts, FileResult, Kind, PathProbe, Target};
 
-use super::context::{FileContext, PathProbe};
+use super::context::FileContext;
 use super::rules;
 use super::score::score;
 use super::sink::{FindingSink, Tally};

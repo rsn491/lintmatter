@@ -70,7 +70,7 @@ enum ColorChoice {
 /// Why a run could not start: a bad flag, or a setting that does not resolve.
 #[derive(Debug, thiserror::Error)]
 enum CliError {
-    #[error(transparent)]
+    #[error("{0} in --disable: run --list-rules to see them all")]
     UnknownRules(#[from] UnknownRules),
     #[error(transparent)]
     Config(#[from] ConfigError),

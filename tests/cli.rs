@@ -346,7 +346,7 @@ fn usage_errors() {
         (
             "unknown rule",
             vec!["--disable", "no.such.rule"],
-            "unknown rule",
+            "unknown rule \"no.such.rule\" in --disable: run --list-rules to see them all",
         ),
         (
             "negative budget",

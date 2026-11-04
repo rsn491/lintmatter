@@ -3,8 +3,7 @@
 use std::path::Path;
 
 /// Distinguishes the two file types lintmatter understands.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Agents,
     Skill,

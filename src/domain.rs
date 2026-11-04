@@ -8,6 +8,7 @@ pub mod fence;
 pub mod finding;
 pub mod kind;
 pub mod lint;
+pub mod ports;
 pub mod summary;
 pub mod target;
 #[cfg(test)]
@@ -18,5 +19,6 @@ pub use config::Config;
 pub use document::Document;
 pub use finding::{Counts, FileResult, Finding, Severity};
 pub use kind::{Kind, kind_for};
+pub use ports::PathProbe;
 pub use summary::{Summary, summarize};
 pub use target::Target;

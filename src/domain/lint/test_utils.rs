@@ -3,9 +3,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::domain::tokens::Counter;
-use crate::domain::{Config, FileResult, Finding, Kind, Target};
+use crate::domain::{Config, FileResult, Finding, Kind, PathProbe, Target};
 
-use super::{Linter, PathProbe};
+use super::Linter;
 
 pub(super) fn write_skill(skill_name: &str, src: &str) -> (tempfile::TempDir, Target) {
     let base = tempfile::tempdir().unwrap();

@@ -6,6 +6,9 @@ use std::path::Path;
 
 use crate::domain::Target;
 
+/// Owned by the domain, because a rule needs it; listed here with the rest.
+pub use crate::domain::PathProbe;
+
 /// Reads a target's raw bytes.
 pub trait SourceReader {
     fn read(&self, path: &Path) -> io::Result<Vec<u8>>;

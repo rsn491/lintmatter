@@ -7,5 +7,5 @@ pub mod ports;
 pub mod settings;
 
 pub use lint_run::{LintRun, Outcome, ReadError};
-pub use ports::{SourceReader, TargetFinder};
+pub use ports::{PathProbe, SourceReader, TargetFinder};
 pub use settings::{RunSettings, Settings, UnknownRules};

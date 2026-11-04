@@ -1,8 +1,7 @@
 use crate::domain::Kind;
 
 /// Marks how a finding affects the exit code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     Error,
     Warning,
@@ -20,31 +19,24 @@ impl std::fmt::Display for Severity {
 /// A single rule violation.
 ///
 /// The file is the enclosing [`FileResult`]'s path; the JSON reporter re-adds it.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct Finding {
-    #[serde(skip_serializing_if = "is_zero")]
     pub line: usize,
     pub rule: &'static str,
     pub severity: Severity,
     pub message: String,
 }
 
-fn is_zero(n: &usize) -> bool {
-    *n == 0
-}
-
 /// The measured token cost of a file's parts.
-#[derive(Debug, Clone, Default, serde::Serialize)]
+#[derive(Debug, Clone, Default)]
 pub struct Counts {
     pub content: usize,
-    #[serde(skip_serializing_if = "is_zero")]
     pub name: usize,
-    #[serde(skip_serializing_if = "is_zero")]
     pub description: usize,
 }
 
 /// Everything lintmatter learned about one file.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone)]
 pub struct FileResult {
     pub path: String,
     pub kind: Kind,

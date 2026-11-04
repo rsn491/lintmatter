@@ -6,13 +6,7 @@ use crate::domain::document::{self, Document, ErrKind, Frontmatter};
 use crate::utils::clean_path;
 
 use crate::domain::Counts;
-
-/// Answers whether a path exists, so a rule can check a reference without the
-/// domain touching the filesystem itself. The filesystem adapter provides the
-/// real one; tests can substitute a fixed answer.
-pub trait PathProbe: Sync {
-    fn exists(&self, path: &Path) -> bool;
-}
+use crate::domain::PathProbe;
 
 /// Everything a rule may look at for one file.
 ///

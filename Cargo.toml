@@ -30,6 +30,9 @@ serde_json = "1"
 thiserror = "2"
 
 [dev-dependencies]
+# span-locations gives tests/architecture.rs line numbers for its findings.
+proc-macro2 = { version = "1", features = ["span-locations"] }
+syn = { version = "3", default-features = false, features = ["full", "parsing", "visit"] }
 tempfile = "3"
 
 [profile.release]

@@ -1,7 +1,7 @@
 use crate::domain::FileResult;
 
 /// Counts a whole run.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Summary {
     pub files: usize,
     pub files_with_errors: usize,

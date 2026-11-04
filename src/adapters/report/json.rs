@@ -1,12 +1,12 @@
-//! The machine-readable report.
+//! The machine-readable report. The JSON shape is defined here and nowhere
+//! else: the domain types carry no serialization attributes, so the wire
+//! format cannot change by accident when the model does.
 
 use std::io::{self, Write};
 
-use crate::domain::Kind;
-use crate::domain::{Counts, FileResult, Severity};
+use crate::domain::{Counts, FileResult, Kind, Severity, Summary};
 
 use super::reporter::Report;
-use crate::domain::Summary;
 
 /// Bumped when the JSON shape changes incompatibly.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -15,7 +15,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 struct JsonReport<'a> {
     version: u32,
     files: Vec<JsonFile<'a>>,
-    summary: Summary,
+    summary: JsonSummary,
 }
 
 /// Serialization view of [`FileResult`]: re-attaches `file` to each finding to
@@ -23,24 +23,81 @@ struct JsonReport<'a> {
 #[derive(serde::Serialize)]
 struct JsonFile<'a> {
     path: &'a str,
-    kind: Kind,
-    tokens: &'a Counts,
+    kind: &'static str,
+    tokens: JsonCounts,
     score: u8,
     findings: Vec<JsonFinding<'a>>,
+}
+
+/// A zero name or description count means there was nothing to count (AGENTS.md
+/// has neither), so the key is omitted rather than reported as a cost of 0.
+#[derive(serde::Serialize)]
+struct JsonCounts {
+    content: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    name: usize,
+    #[serde(skip_serializing_if = "is_zero")]
+    description: usize,
+}
+
+impl From<&Counts> for JsonCounts {
+    fn from(c: &Counts) -> Self {
+        JsonCounts {
+            content: c.content,
+            name: c.name,
+            description: c.description,
+        }
+    }
 }
 
 #[derive(serde::Serialize)]
 struct JsonFinding<'a> {
     file: &'a str,
+    /// Zero marks a finding about the file as a whole; it has no line to show.
     #[serde(skip_serializing_if = "is_zero")]
     line: usize,
     rule: &'static str,
-    severity: Severity,
+    severity: &'static str,
     message: &'a str,
+}
+
+#[derive(serde::Serialize)]
+struct JsonSummary {
+    files: usize,
+    files_with_errors: usize,
+    files_with_warnings: usize,
+    score: u8,
+}
+
+impl From<&Summary> for JsonSummary {
+    fn from(s: &Summary) -> Self {
+        JsonSummary {
+            files: s.files,
+            files_with_errors: s.files_with_errors,
+            files_with_warnings: s.files_with_warnings,
+            score: s.score,
+        }
+    }
 }
 
 fn is_zero(n: &usize) -> bool {
     *n == 0
+}
+
+/// Spelled out rather than borrowed from `Display`, so rewording the text
+/// report can never change the JSON schema.
+fn kind_name(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Agents => "agents",
+        Kind::Skill => "skill",
+    }
+}
+
+fn severity_name(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Error => "error",
+        Severity::Warning => "warning",
+    }
 }
 
 /// Writes the whole run as a single object, sorted by path upstream so the
@@ -60,8 +117,8 @@ impl Report for JsonReporter {
             .iter()
             .map(|r| JsonFile {
                 path: &r.path,
-                kind: r.kind,
-                tokens: &r.tokens,
+                kind: kind_name(r.kind),
+                tokens: JsonCounts::from(&r.tokens),
                 score: r.score,
                 findings: r
                     .findings
@@ -71,7 +128,7 @@ impl Report for JsonReporter {
                         file: &r.path,
                         line: f.line,
                         rule: f.rule,
-                        severity: f.severity,
+                        severity: severity_name(f.severity),
                         message: &f.message,
                     })
                     .collect(),
@@ -81,7 +138,7 @@ impl Report for JsonReporter {
         let report = JsonReport {
             version: SCHEMA_VERSION,
             files,
-            summary: *summary,
+            summary: JsonSummary::from(summary),
         };
         let mut buf = serde_json::to_vec_pretty(&report).map_err(io::Error::other)?;
         buf.push(b'\n');

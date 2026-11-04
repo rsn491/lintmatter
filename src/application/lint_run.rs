@@ -84,7 +84,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::domain::lint::PathProbe;
+    use crate::application::PathProbe;
     use crate::domain::{Config, Kind, Target};
 
     /// Finds a fixed list of skills, whatever it is asked.
