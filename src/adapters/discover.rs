@@ -140,7 +140,7 @@ impl Discoverer {
             .map_err(read_err(dir))?
             .collect::<Result<_, _>>()
             .map_err(read_err(dir))?;
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort_by_key(fs::DirEntry::file_name);
 
         entries.into_iter().try_for_each(|entry| {
             let path = entry.path();
@@ -295,8 +295,8 @@ mod tests {
             ),
         ];
         for (excludes, want) in cases {
-            let excludes: Vec<String> = excludes.iter().map(|s| s.to_string()).collect();
-            let want: Vec<String> = want.iter().map(|s| s.to_string()).collect();
+            let excludes: Vec<String> = excludes.iter().map(ToString::to_string).collect();
+            let want: Vec<String> = want.iter().map(ToString::to_string).collect();
 
             // When
             let targets = find(std::slice::from_ref(&root), &excludes).unwrap();

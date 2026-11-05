@@ -71,10 +71,7 @@ impl Frontmatter {
     /// Returns the 1-based line where key is declared, or end_line as a
     /// fallback when the key is absent.
     pub fn line(&self, key: &str) -> usize {
-        self.entries
-            .get(key)
-            .map(|e| e.key_line)
-            .unwrap_or(self.end_line)
+        self.entries.get(key).map_or(self.end_line, |e| e.key_line)
     }
 
     /// Returns the value node for key, or None when the key is absent.
@@ -117,9 +114,15 @@ impl Frontmatter {
 
 const BOM: char = '\u{feff}';
 
-static OPEN_FENCE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^-{3,}[ \t]*$").unwrap());
+static OPEN_FENCE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^-{3,}[ \t]*$").expect("valid regex literal"));
 static CLOSE_FENCE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(-{3,}|\.{3,})[ \t]*$").unwrap());
+    LazyLock::new(|| Regex::new(r"^(-{3,}|\.{3,})[ \t]*$").expect("valid regex literal"));
+
+/// Joins a range of lines; a range past the end yields nothing rather than panicking.
+fn join_lines(lines: &[&str], range: std::ops::Range<usize>) -> String {
+    lines.get(range).map_or_else(String::new, |l| l.join("\n"))
+}
 
 fn fence_line(line: &str) -> &str {
     line.trim_end_matches('\r')
@@ -211,7 +214,7 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
         .map(|(i, _)| i);
     let Some(close_idx) = close_idx else {
         // The fence never counts toward the content budget, even unterminated.
-        let body = lines[open + 1..].join("\n");
+        let body = join_lines(&lines, open + 1..lines.len());
         return (
             Frontmatter {
                 present: true,
@@ -226,12 +229,8 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
         );
     };
 
-    let block = lines[open + 1..close_idx].join("\n");
-    let body = if close_idx + 1 < lines.len() {
-        lines[close_idx + 1..].join("\n")
-    } else {
-        String::new()
-    };
+    let block = join_lines(&lines, open + 1..close_idx);
+    let body = join_lines(&lines, close_idx + 1..lines.len());
 
     let mut fm = Frontmatter {
         present: true,
@@ -311,7 +310,7 @@ fn misplaced_frontmatter(lines: &[&str]) -> Option<usize> {
             .skip(i + 1)
             .find(|(_, l)| CLOSE_FENCE_RE.is_match(fence_line(l)))
             .map(|(j, _)| j)?;
-        let block = lines[i + 1..close].join("\n");
+        let block = join_lines(lines, i + 1..close);
         let docs = MarkedYaml::load_from_str(&block).ok()?;
         let root = docs.into_iter().next()?;
         let YamlData::Mapping(map) = &root.data else {

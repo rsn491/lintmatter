@@ -1,6 +1,39 @@
 [workspace]
 members = ["web"]
 
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Attribute and doc boilerplate with no bearing on correctness in a binary-first crate.
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+# Score and line-count arithmetic stays far below the widths where these casts misbehave.
+cast_precision_loss = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+# clap's Flags struct is one bool per CLI switch.
+struct_excessive_bools = "allow"
+similar_names = "allow"
+mod_module_files = "warn"
+cognitive_complexity = "warn"
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+unwrap_used = "warn"
+# Regex literals in statics use .expect(): the pattern is a constant, so a bare unwrap would say less.
+expect_used = "allow"
+panic = "warn"
+indexing_slicing = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+
 [package]
 name = "lintmatter"
 version = "0.1.1"
@@ -11,6 +44,9 @@ description = "A linter for agentic context"
 repository = "https://github.com/rsn491/lintmatter"
 homepage = "https://github.com/rsn491/lintmatter"
 license = "MIT"
+
+[lints]
+workspace = true
 
 [lib]
 name = "lintmatter"

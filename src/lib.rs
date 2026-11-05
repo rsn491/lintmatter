@@ -21,8 +21,6 @@
 //! token budgets from here rather than restating numbers that would then
 //! drift.
 
-#![warn(clippy::mod_module_files)]
-
 pub mod adapters;
 pub mod application;
 pub mod domain;
