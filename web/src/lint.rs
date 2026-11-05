@@ -80,24 +80,24 @@ impl Budgets {
     }
 
     fn validate(&self) -> Result<(), BudgetError> {
-        for (flag, value) in self.entries() {
-            let Some(n) = value else { continue };
-            if !(0..=MAX_BUDGET).contains(&n) {
-                return Err(BudgetError { flag, n });
-            }
-        }
-        Ok(())
+        self.entries()
+            .into_iter()
+            .filter_map(|(flag, value)| value.map(|n| (flag, n)))
+            .try_for_each(|(flag, n)| {
+                if (0..=MAX_BUDGET).contains(&n) {
+                    Ok(())
+                } else {
+                    Err(BudgetError { flag, n })
+                }
+            })
     }
 
     fn flags(&self) -> Vec<String> {
-        let mut args = Vec::new();
-        for (flag, value) in self.entries() {
-            if let Some(n) = value {
-                args.push(flag.to_string());
-                args.push(n.to_string());
-            }
-        }
-        args
+        self.entries()
+            .into_iter()
+            .filter_map(|(flag, value)| value.map(|n| [flag.to_string(), n.to_string()]))
+            .flatten()
+            .collect()
     }
 }
 

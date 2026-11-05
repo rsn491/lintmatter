@@ -56,18 +56,19 @@ impl<F: TargetFinder, R: SourceReader> LintRun<F, R> {
     /// cannot be read is recorded in [`Outcome::unreadable`] and skipped.
     pub fn execute(&self, paths: &[String], excludes: &[String]) -> Result<Outcome, F::Error> {
         let targets = self.finder.find(paths, excludes)?;
-        let mut results = Vec::with_capacity(targets.len());
         // A file can vanish between discovery and linting: skip it, but still fail.
-        let mut unreadable = Vec::new();
-        for t in &targets {
-            match self.reader.read(Path::new(&t.path)) {
-                Ok(src) => results.push(self.linter.check(t, &src)),
-                Err(source) => unreadable.push(ReadError {
+        let (read, failed): (Vec<_>, Vec<_>) = targets
+            .iter()
+            .map(|t| match self.reader.read(Path::new(&t.path)) {
+                Ok(src) => Ok(self.linter.check(t, &src)),
+                Err(source) => Err(ReadError {
                     path: t.path.clone(),
                     source,
                 }),
-            }
-        }
+            })
+            .partition(Result::is_ok);
+        let results: Vec<_> = read.into_iter().flatten().collect();
+        let unreadable: Vec<_> = failed.into_iter().filter_map(Result::err).collect();
         let summary = summarize(&results);
         Ok(Outcome {
             results,

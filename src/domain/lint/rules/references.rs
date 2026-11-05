@@ -54,16 +54,18 @@ impl Rule for Missing {
         };
 
         let mut fences = FenceTracker::default();
-        for (i, line) in ctx.doc.body.split('\n').enumerate() {
-            if !fences.scan_line(line) {
-                continue;
-            }
-            for target in line_targets(line) {
+        ctx.doc
+            .body
+            .split('\n')
+            .enumerate()
+            .filter(|(_, line)| fences.scan_line(line))
+            .flat_map(|(i, line)| line_targets(line).into_iter().map(move |t| (i, t)))
+            .for_each(|(i, target)| {
                 // Resolved lexically, so deciding whether a reference escapes
                 // the tree costs no filesystem access of its own.
                 let resolved = ctx.abs_path(&dir.join(&target));
                 if !resolved.starts_with(&root) {
-                    continue;
+                    return;
                 }
                 sink.applies();
                 if !ctx.exists(&resolved) {
@@ -72,8 +74,7 @@ impl Rule for Missing {
                         format!("referenced file {target:?} does not exist"),
                     );
                 }
-            }
-        }
+            });
     }
 }
 
@@ -81,20 +82,19 @@ impl Rule for Missing {
 /// code span naming the same target report once.
 fn line_targets(line: &str) -> Vec<String> {
     let masked = mask_code_spans(line);
-    let mut targets: Vec<String> = Vec::new();
-    for caps in LINK_RE.captures_iter(&masked) {
-        if let Some(target) = link_target_path(&caps[1]) {
-            targets.push(target);
-        }
-    }
-    for caps in CODE_SPAN_RE.captures_iter(line) {
-        if let Some(target) = code_span_target_path(&caps[1])
-            && !targets.contains(&target)
-        {
-            targets.push(target);
-        }
-    }
-    targets
+    let links: Vec<String> = LINK_RE
+        .captures_iter(&masked)
+        .filter_map(|caps| link_target_path(&caps[1]))
+        .collect();
+    CODE_SPAN_RE
+        .captures_iter(line)
+        .filter_map(|caps| code_span_target_path(&caps[1]))
+        .fold(links, |mut targets, target| {
+            if !targets.contains(&target) {
+                targets.push(target);
+            }
+            targets
+        })
 }
 
 /// Blanks out inline code spans so link syntax shown inside backticks --

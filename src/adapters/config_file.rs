@@ -36,15 +36,10 @@ const KNOWN_KEYS: &[&str] = &[
 /// found in `start` or any ancestor directory. Walking up means running
 /// lintmatter from a subdirectory still picks up the repository's settings.
 pub fn discover(start: &Path) -> Option<PathBuf> {
-    for dir in start.ancestors() {
-        for name in FILE_NAMES {
-            let candidate = dir.join(name);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-        }
-    }
-    None
+    start
+        .ancestors()
+        .flat_map(|dir| FILE_NAMES.iter().map(move |name| dir.join(name)))
+        .find(|candidate| candidate.is_file())
 }
 
 /// Why a config file could not be used.
@@ -111,7 +106,7 @@ pub fn load(path: &Path) -> Result<Settings, ConfigError> {
 
 /// Parses config text. `path` only labels the error messages.
 pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
-    let mut cfg = Settings::default();
+    let cfg = Settings::default();
 
     let docs = MarkedYaml::load_from_str(src).map_err(|e| {
         invalid(
@@ -132,7 +127,7 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
         return Err(invalid(path, root.span.start.line(), Problem::NotMapping));
     };
 
-    for (key, value) in map.iter() {
+    map.iter().try_fold(cfg, |mut cfg, (key, value)| {
         let line = key.span.start.line();
         let Some(name) = scalar_string(&key.data) else {
             return Err(invalid(path, line, Problem::NonStringKey));
@@ -150,9 +145,8 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
             "rules" => cfg.disabled = rules(path, value)?,
             _ => return Err(invalid(path, line, Problem::UnknownSetting(name))),
         }
-    }
-
-    Ok(cfg)
+        Ok(cfg)
+    })
 }
 
 /// Reads `rules:`, a mapping of rule id to whether it runs. Only the ids
@@ -167,20 +161,20 @@ fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, ConfigError> {
         ));
     };
 
-    let mut disabled = Vec::new();
-    for (key, value) in map.iter() {
-        let key_line = key.span.start.line();
-        let Some(rule) = scalar_string(&key.data) else {
-            return Err(invalid(path, key_line, Problem::NonStringRuleId));
-        };
-        if !RULES.contains(&rule.as_str()) {
-            return Err(invalid(path, key_line, Problem::UnknownRule(rule)));
-        }
-        if !boolean(path, &format!("rules.{rule}"), value)? {
-            disabled.push(rule);
-        }
-    }
-    Ok(disabled)
+    map.iter()
+        .map(|(key, value)| {
+            let key_line = key.span.start.line();
+            let Some(rule) = scalar_string(&key.data) else {
+                return Err(invalid(path, key_line, Problem::NonStringRuleId));
+            };
+            if !RULES.contains(&rule.as_str()) {
+                return Err(invalid(path, key_line, Problem::UnknownRule(rule)));
+            }
+            let enabled = boolean(path, &format!("rules.{rule}"), value)?;
+            Ok((!enabled).then_some(rule))
+        })
+        .filter_map(Result::transpose)
+        .collect()
 }
 
 /// Reads a token budget. Zero disables the check it belongs to, matching the

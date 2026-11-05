@@ -15,27 +15,18 @@ pub struct Summary {
 /// warning. Mirrors other linters' summaries, which report the files
 /// affected rather than a raw finding tally.
 pub fn summarize(results: &[FileResult]) -> Summary {
-    let mut s = Summary {
+    let total: u32 = results.iter().map(|r| u32::from(r.score)).sum();
+    Summary {
         files: results.len(),
-        ..Default::default()
-    };
-    let mut total: u32 = 0;
-    for r in results {
-        if r.errors() > 0 {
-            s.files_with_errors += 1;
-        }
-        if r.warnings() > 0 {
-            s.files_with_warnings += 1;
-        }
-        total += u32::from(r.score);
+        files_with_errors: results.iter().filter(|r| r.errors() > 0).count(),
+        files_with_warnings: results.iter().filter(|r| r.warnings() > 0).count(),
+        score: if results.is_empty() {
+            100
+        } else {
+            // Floored, matching the per-file scores it averages.
+            (total / results.len() as u32) as u8
+        },
     }
-    s.score = if results.is_empty() {
-        100
-    } else {
-        // Floored, matching the per-file scores it averages.
-        (total / results.len() as u32) as u8
-    };
-    s
 }
 
 #[cfg(test)]

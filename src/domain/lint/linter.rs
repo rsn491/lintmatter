@@ -85,13 +85,13 @@ impl Linter {
                 strict: self.cfg.strict,
                 rule: "",
             };
-            for rule in rules::all() {
-                if !rule.applies_to(t.kind) || self.disabled.contains(rule.id()) {
-                    continue;
-                }
-                sink.rule = rule.id();
-                rule.check(&ctx, &mut sink);
-            }
+            rules::all()
+                .iter()
+                .filter(|rule| rule.applies_to(t.kind) && !self.disabled.contains(rule.id()))
+                .for_each(|rule| {
+                    sink.rule = rule.id();
+                    rule.check(&ctx, &mut sink);
+                });
         }
 
         FileResult {

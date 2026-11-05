@@ -46,48 +46,30 @@ impl Default for Estimator {
 
 impl Counter for Estimator {
     fn count(&self, s: &str) -> usize {
-        let mut total = 0usize;
-        let mut runs = 0usize; // consecutive word runes, flushed when the run ends
-        let mut space = 0usize; // consecutive whitespace characters, excluding newlines
-
-        let flush_word = |runs: &mut usize, total: &mut usize| {
-            if *runs > 0 {
-                *total += ceil_div(*runs, 4);
-                *runs = 0;
-            }
-        };
-        let flush_space = |space: &mut usize, total: &mut usize| {
-            if *space > 1 {
-                *total += ceil_div(*space - 1, 4);
-            }
-            *space = 0;
+        // (total, consecutive word runes, consecutive non-newline whitespace)
+        let flush_word =
+            |(total, runs, space): (usize, usize, usize)| (total + ceil_div(runs, 4), 0, space);
+        let flush_space = |(total, runs, space): (usize, usize, usize)| {
+            let extra = if space > 1 { ceil_div(space - 1, 4) } else { 0 };
+            (total + extra, runs, 0)
         };
 
-        for r in s.chars() {
-            if r == '\n' || r == '\r' {
-                flush_word(&mut runs, &mut total);
-                flush_space(&mut space, &mut total);
-                total += 1;
+        let (total, runs, space) = s.chars().fold((0, 0, 0), |state, r| {
+            if r == '\n' || r == '\r' || r as u32 > 127 {
+                let (total, runs, space) = flush_space(flush_word(state));
+                (total + 1, runs, space)
             } else if r.is_whitespace() {
-                flush_word(&mut runs, &mut total);
-                space += 1;
-            } else if r as u32 > 127 {
-                flush_word(&mut runs, &mut total);
-                flush_space(&mut space, &mut total);
-                total += 1;
+                let (total, runs, space) = flush_word(state);
+                (total, runs, space + 1)
             } else if is_word_rune(r) {
-                flush_space(&mut space, &mut total);
-                runs += 1;
+                let (total, runs, space) = flush_space(state);
+                (total, runs + 1, space)
             } else {
-                flush_word(&mut runs, &mut total);
-                flush_space(&mut space, &mut total);
-                total += 1;
+                let (total, runs, space) = flush_space(flush_word(state));
+                (total + 1, runs, space)
             }
-        }
-        flush_word(&mut runs, &mut total);
-        flush_space(&mut space, &mut total);
-
-        total
+        });
+        flush_space(flush_word((total, runs, space))).0
     }
 }
 
