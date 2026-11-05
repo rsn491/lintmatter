@@ -1,13 +1,19 @@
 Output "docs/img/scorecard.gif"
 Set Shell "zsh"
-Set FontFamily "Menlo"
-Set FontSize 23
-Set Width 1600
-Set Height 760
-Set Padding 30
+# Menlo on macOS; JetBrains Mono where Menlo isn't installed.
+Set FontFamily "Menlo, JetBrains Mono"
+# The README scales the GIF to the page width, so on a phone the text is only
+# as legible as the terminal is narrow. Width fits the widest line of the
+# report (128 columns, frontmatter.missing) at this FontSize and no more, and
+# Height fits the report, so no frame space is spent on empty terminal.
+# Change Width with FontSize, and grow both if the fixtures' output grows.
+Set FontSize 16
+Set Width 1350
+Set Height 540
+Set Padding 20
 Set Theme "Catppuccin Macchiato"
 Set WindowBar "Colorful"
-Set WindowBarSize 45
+Set WindowBarSize 40
 Set TypingSpeed 45ms
 
 # Prepare the development binary and color environment without recording setup.
