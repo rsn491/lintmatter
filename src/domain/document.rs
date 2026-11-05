@@ -259,7 +259,7 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
                 Some(Error {
                     kind: ErrKind::InvalidYaml,
                     line: e.marker().line() + open + 1,
-                    msg: format!("invalid YAML in front matter: {}", clean_yaml_err(e.info())),
+                    msg: format!("invalid YAML in front matter: {}", e.info().trim()),
                 }),
             );
         }
@@ -427,12 +427,6 @@ fn to_value(node: &MarkedYaml) -> Value {
         YamlData::Mapping(_) => Value::Mapping,
         YamlData::Alias(_) | YamlData::BadValue | YamlData::Tagged(..) => Value::Other,
     }
-}
-
-/// Trims saphyr's positional suffix so a finding stays on one line and does
-/// not repeat the line number the caller already reports separately.
-fn clean_yaml_err(info: &str) -> String {
-    info.trim().to_string()
 }
 
 #[cfg(test)]
