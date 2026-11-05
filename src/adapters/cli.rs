@@ -155,7 +155,14 @@ fn load_config(f: &Flags, cwd: &Path) -> Result<Settings, CliError> {
         return Ok(Settings::default());
     }
     match config_file::discover(cwd) {
-        Some(path) => Ok(config_file::load(&path)?),
+        Some(path) => {
+            // A checked-in config can loosen or disable rules, so say which
+            // one is in effect rather than applying it silently.
+            if !f.quiet {
+                eprintln!("lintmatter: using config {}", path.display());
+            }
+            Ok(config_file::load(&path)?)
+        }
         None => Ok(Settings::default()),
     }
 }

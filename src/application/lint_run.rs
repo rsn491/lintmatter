@@ -10,7 +10,7 @@ use super::ports::{SourceReader, TargetFinder};
 
 /// A target that vanished or became unreadable after discovery.
 #[derive(Debug, thiserror::Error)]
-#[error("cannot read {path}: {source}")]
+#[error("cannot read {}: {source}", crate::utils::escape_control(path))]
 pub struct ReadError {
     path: String,
     source: std::io::Error,

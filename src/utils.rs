@@ -39,6 +39,21 @@ pub fn to_slash(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+/// Makes control characters visible (`\u{1b}`), so a name taken from disk
+/// cannot move the cursor, recolor the terminal or forge a report line.
+pub fn escape_control(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| {
+            let escaped: Vec<char> = if c.is_control() {
+                c.escape_default().collect()
+            } else {
+                vec![c]
+            };
+            escaped
+        })
+        .collect()
+}
+
 /// Lexically normalizes a path: resolves `.` and `..` textually, without
 /// touching the filesystem or following symlinks (mirroring Go's
 /// `filepath.Clean`). `..` above the root is dropped rather than escaping it.
@@ -140,5 +155,18 @@ mod tests {
 
         // Then
         assert_eq!(got, [0, 1, 1, 2]);
+    }
+
+    #[test]
+    fn escape_control_makes_terminal_codes_visible() {
+        // Given
+        let hostile = "a\u{1b}[31m\nb";
+
+        // When
+        let out = escape_control(hostile);
+
+        // Then
+        assert_eq!(out, "a\\u{1b}[31m\\nb");
+        assert_eq!(escape_control("plain/päth"), "plain/päth");
     }
 }
