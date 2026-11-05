@@ -13,17 +13,19 @@ use crate::domain::lint::{FileContext, FindingSink, RULE_FILE_REFERENCE_MISSING}
 
 /// Matches inline markdown links and images: `[text](target)` or
 /// `![alt](target)`. Does not handle reference-style links (`[text][ref]`).
-static LINK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!?\[[^\]]*\]\(([^)]+)\)").unwrap());
+static LINK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"!?\[[^\]]*\]\(([^)]+)\)").expect("valid regex literal"));
 
 /// Matches inline code spans: `` `text` ``. Does double duty: a span's contents
 /// are masked out of the link scan, and are then read as a reference in their
 /// own right. Fenced code blocks are excluded separately, by the FenceTracker.
-static CODE_SPAN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").unwrap());
+static CODE_SPAN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"`([^`]+)`").expect("valid regex literal"));
 
 /// Detects an absolute URI (`https://`, `mailto:`, `tel:`, and the like) so
 /// those targets are left for a browser rather than checked as files.
 static URI_SCHEME_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[a-zA-Z][a-zA-Z0-9+.-]*:").unwrap());
+    LazyLock::new(|| Regex::new(r"^[a-zA-Z][a-zA-Z0-9+.-]*:").expect("valid regex literal"));
 
 /// Applies to both AGENTS.md and SKILL.md, since a dangling reference breaks
 /// the file's contract with the runtime regardless of kind.

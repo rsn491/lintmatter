@@ -17,7 +17,7 @@ use crate::domain::lint::{
 /// The spec's naming rule: lowercase alphanumerics in hyphen-separated
 /// segments.
 static NAME_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[a-z0-9]+(?:-[a-z0-9]+)*$").unwrap());
+    LazyLock::new(|| Regex::new(r"^[a-z0-9]+(?:-[a-z0-9]+)*$").expect("valid regex literal"));
 
 pub struct Required;
 
