@@ -15,7 +15,7 @@ use lintmatter::domain::config::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-const CLONE_TIMEOUT: Duration = Duration::from_secs(60);
+const CLONE_TIMEOUT: Duration = Duration::from_mins(1);
 const LINT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Caps a budget well above any real file so a typo in the form cannot turn
@@ -44,7 +44,9 @@ struct BudgetError {
 /// present wins over that file, the same way the flag does on the command
 /// line -- which is what makes the form authoritative when it sends one.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Budgets {
+// The fields mirror the `--max-*` flags and the form inputs one to one.
+#[expect(clippy::struct_field_names)]
+pub(crate) struct Budgets {
     max_agents_tokens: Option<i64>,
     max_skill_tokens: Option<i64>,
     max_skill_name_tokens: Option<i64>,
@@ -55,7 +57,7 @@ impl Budgets {
     /// What a bare `lintmatter` run enforces. The page starts the form from
     /// these, so the numbers on screen are the linter's own rather than a
     /// second opinion that could drift from it.
-    pub fn defaults() -> Self {
+    pub(crate) fn defaults() -> Self {
         Budgets {
             max_agents_tokens: Some(DEFAULT_MAX_AGENTS_TOKENS),
             max_skill_tokens: Some(DEFAULT_MAX_SKILL_TOKENS),
@@ -111,7 +113,7 @@ struct BudgetSettings {
 }
 
 /// The budget form's settings as JSON, for embedding in the page.
-pub fn budget_settings_json() -> String {
+pub(crate) fn budget_settings_json() -> String {
     let settings = BudgetSettings {
         defaults: Budgets::defaults(),
         max: MAX_BUDGET,
@@ -120,7 +122,7 @@ pub fn budget_settings_json() -> String {
 }
 
 #[derive(Deserialize)]
-pub struct LintRequest {
+pub(crate) struct LintRequest {
     url: String,
     /// Absent for a caller that only sends a URL, which then gets whatever
     /// the repository and lintmatter's defaults work out between them.
@@ -131,7 +133,7 @@ pub struct LintRequest {
 /// The detail behind an error never reaches the client: it may contain
 /// internal paths, subprocess stderr, or other implementation details.
 /// It's only ever logged server-side; the client gets `public_message`.
-pub struct ApiError {
+pub(crate) struct ApiError {
     status: StatusCode,
     log_detail: String,
     public_message: &'static str,
@@ -143,7 +145,9 @@ impl IntoResponse for ApiError {
     }
 }
 
-pub async fn handle_lint(Json(req): Json<LintRequest>) -> Result<Json<Value>, ApiError> {
+// The request log goes to stdout, where the container runtime collects it.
+#[expect(clippy::print_stdout)]
+pub(crate) async fn handle_lint(Json(req): Json<LintRequest>) -> Result<Json<Value>, ApiError> {
     let url = req.url.clone();
     // The budgets are logged too: a report only makes sense next to the
     // limits it was measured against.
@@ -277,17 +281,15 @@ async fn run_lintmatter(repo_dir: &Path, budgets: &Budgets) -> Result<Value, Api
     // lintmatter exits 0 (clean) or 1 (findings reported) on a successful run;
     // anything else (2 = usage error, or killed by signal) means the run
     // itself failed and stdout won't be valid JSON.
-    match output.status.code() {
-        Some(0) | Some(1) => serde_json::from_slice(&output.stdout)
-            .map_err(|e| server_error(format!("failed to parse lintmatter output: {e}"))),
-        _ => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(server_error(format!(
-                "lintmatter failed: {}",
-                stderr.trim()
-            )))
-        }
+    if let Some(0 | 1) = output.status.code() {
+        return serde_json::from_slice(&output.stdout)
+            .map_err(|e| server_error(format!("failed to parse lintmatter output: {e}")));
     }
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    Err(server_error(format!(
+        "lintmatter failed: {}",
+        stderr.trim()
+    )))
 }
 
 /// Locates the `lintmatter` binary as a sibling of this binary, since both are
@@ -310,6 +312,8 @@ fn lintmatter_binary_path() -> PathBuf {
     PathBuf::from(name)
 }
 
+// Callers hand over errors and formatted strings they have no further use for.
+#[expect(clippy::needless_pass_by_value)]
 fn bad_request(log_detail: impl ToString, public_message: &'static str) -> ApiError {
     ApiError {
         status: StatusCode::BAD_REQUEST,
@@ -318,6 +322,7 @@ fn bad_request(log_detail: impl ToString, public_message: &'static str) -> ApiEr
     }
 }
 
+#[expect(clippy::needless_pass_by_value)]
 fn server_error(log_detail: impl ToString) -> ApiError {
     ApiError {
         status: StatusCode::INTERNAL_SERVER_ERROR,

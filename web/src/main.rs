@@ -30,6 +30,9 @@ static DEMO_HTML: LazyLock<String> =
     LazyLock::new(|| render_page(include_str!("index.html"), "demo", "Try lintmatter"));
 
 #[tokio::main]
+// Startup failures (bad PORT, port in use) are fatal by design, and the
+// listen address goes to stdout where the container runtime collects it.
+#[expect(clippy::panic, clippy::print_stdout)]
 async fn main() {
     let app = Router::new()
         .route("/", get(index))
@@ -57,6 +60,10 @@ async fn main() {
 /// `HOST=0.0.0.0`. The default stays loopback: `/lint` shells out to
 /// `git clone` on a URL the caller supplies, which is not something a dev
 /// machine should offer the rest of its network by accident.
+#[expect(
+    clippy::panic,
+    reason = "a malformed PORT is a deployment error to fail fast on"
+)]
 fn bind_addr() -> String {
     let host = std::env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_string());
     let port = match std::env::var("PORT") {

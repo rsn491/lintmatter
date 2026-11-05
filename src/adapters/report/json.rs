@@ -80,6 +80,8 @@ impl From<&Summary> for JsonSummary {
     }
 }
 
+// serde's `skip_serializing_if` hands the field over by reference.
+#[expect(clippy::trivially_copy_pass_by_ref)]
 fn is_zero(n: &usize) -> bool {
     *n == 0
 }

@@ -41,9 +41,8 @@ impl FenceTracker {
 /// Splits a fence line into its marker character, the length of its marker run,
 /// and the info string that follows. `None` when the line is not a fence.
 fn fence_parts(trimmed: &str) -> Option<(char, usize, &str)> {
-    let marker = match trimmed.chars().next()? {
-        c @ ('`' | '~') => c,
-        _ => return None,
+    let marker @ ('`' | '~') = trimmed.chars().next()? else {
+        return None;
     };
     // Markers are ASCII, so the char count doubles as a byte offset.
     let len = trimmed.chars().take_while(|c| *c == marker).count();
