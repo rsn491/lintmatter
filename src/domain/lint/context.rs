@@ -61,8 +61,8 @@ impl FileContext<'_> {
     }
 
     /// Whether `path` exists, asked of the injected [`PathProbe`].
-    pub fn exists(&self, path: &Path) -> bool {
-        self.probe.exists(path)
+    pub fn exists(&self, root: &Path, path: &Path) -> bool {
+        self.probe.exists(root, path)
     }
 
     /// The name of the directory holding the skill file, or `None` when there

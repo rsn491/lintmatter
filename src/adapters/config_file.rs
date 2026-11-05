@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use saphyr::{LoadableYamlNode, MarkedYaml, YamlData};
 
 use crate::application::Settings;
-use crate::domain::document::scalar_string;
+use crate::domain::document::{scalar_string, unsafe_yaml};
 use crate::domain::lint::RULES;
 
 /// File names looked for when `--config` is not given, in priority order.
@@ -108,6 +108,9 @@ pub fn load(path: &Path) -> Result<Settings, ConfigError> {
 pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
     let cfg = Settings::default();
 
+    if let Some(why) = unsafe_yaml(src) {
+        return Err(invalid(path, 1, Problem::Yaml(why.to_string())));
+    }
     let docs = MarkedYaml::load_from_str(src).map_err(|e| {
         invalid(
             path,

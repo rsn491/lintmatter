@@ -149,6 +149,11 @@ impl Discoverer {
             let name = name.to_string_lossy();
             let rel = || to_slash(path.strip_prefix(root).unwrap_or(&path));
 
+            // A link in a tree we were pointed at can name anything the process
+            // can read, so only real files and directories are followed.
+            if file_type.is_symlink() {
+                return Ok(());
+            }
             if file_type.is_dir() {
                 if SKIP_DIRS.contains(&name.as_ref()) || self.excluded(&name, &rel) {
                     return Ok(());

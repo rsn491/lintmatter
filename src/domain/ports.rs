@@ -9,5 +9,8 @@ use std::path::Path;
 /// domain touching the filesystem itself. The filesystem adapter provides the
 /// real one; tests can substitute a fixed answer.
 pub trait PathProbe: Sync {
-    fn exists(&self, path: &Path) -> bool;
+    /// Whether `path`, a location under `root`, exists. A path that only
+    /// reaches outside `root` through a symlink must come back `true`, so a
+    /// reference can never tell the author what exists elsewhere on the host.
+    fn exists(&self, root: &Path, path: &Path) -> bool;
 }
