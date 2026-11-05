@@ -3,7 +3,7 @@
 use std::io::{self, Write};
 
 use crate::domain::{FileResult, Finding, Severity};
-use crate::utils::plural;
+use crate::utils::{escape_control, plural};
 
 use super::reporter::{Report, filter_errors};
 use crate::domain::Summary;
@@ -110,7 +110,7 @@ impl Report for TextReporter {
             writeln!(
                 w,
                 "{}  {}",
-                paint(color, BOLD, &r.path),
+                paint(color, BOLD, &escape_control(&r.path)),
                 paint_score(color, r.score)
             )?;
             findings.iter().try_for_each(|f| {

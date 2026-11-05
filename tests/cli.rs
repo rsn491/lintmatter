@@ -779,3 +779,39 @@ fn a_reference_through_a_symlink_out_of_the_tree_reveals_nothing() {
     // Then
     assert!(!stdout.contains("does not exist"), "{stdout}");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_directory_name_with_a_backslash_is_skipped_not_misread() {
+    // Given
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("AGENTS.md"), "real\n").unwrap();
+    let odd = dir.path().join("a\\b");
+    std::fs::create_dir(&odd).unwrap();
+    std::fs::write(odd.join("AGENTS.md"), "odd\n").unwrap();
+
+    // When
+    let (_, stdout, _) = run_args(&[&dir.path().to_string_lossy()]);
+
+    // Then
+    assert!(stdout.contains("1 file checked"), "{stdout}");
+}
+
+#[cfg(unix)]
+#[test]
+fn an_unreadable_subdirectory_does_not_abort_the_run() {
+    // Given
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("AGENTS.md"), "real\n").unwrap();
+    let locked = dir.path().join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    std::fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+
+    // When
+    let (code, stdout, _) = run_args(&[&dir.path().to_string_lossy()]);
+    std::fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+
+    // Then
+    assert!(stdout.contains("1 file checked"), "{stdout}");
+    assert_ne!(code, EXIT_USAGE);
+}

@@ -9,7 +9,7 @@ use glob::Pattern;
 
 use crate::application::TargetFinder;
 use crate::domain::{Kind, Target, kind_for};
-use crate::utils::to_slash;
+use crate::utils::{escape_control, to_slash};
 
 /// Walks the local filesystem for agent instruction files.
 #[derive(Debug, Clone, Copy, Default)]
@@ -32,6 +32,10 @@ pub enum DiscoverError {
     NotInstructionFile(PathBuf),
     #[error("{} is more than {MAX_DEPTH} directories deep: refusing to recurse further", .0.display())]
     TooDeep(PathBuf),
+    #[error(
+        "too many exclude patterns (at most {MAX_EXCLUDES}) or one longer than {MAX_PATTERN_LEN} characters"
+    )]
+    TooManyExcludes,
     #[error("invalid exclude pattern {pattern:?}: {source}")]
     BadExclude {
         pattern: String,
@@ -45,6 +49,11 @@ fn read_err(path: &Path) -> impl FnOnce(io::Error) -> DiscoverError + '_ {
         source,
     }
 }
+
+/// Patterns are matched against every entry of a tree we do not control, and
+/// glob matching backtracks, so how many there are and how long is bounded.
+const MAX_EXCLUDES: usize = 64;
+const MAX_PATTERN_LEN: usize = 256;
 
 /// Recursion limit, so a pathological layout cannot exhaust the stack.
 const MAX_DEPTH: usize = 64;
@@ -133,20 +142,41 @@ impl Discoverer {
     }
 
     fn walk(&mut self, root: &Path, dir: &Path, depth: usize) -> Result<(), DiscoverError> {
+        // One unreadable or pathological directory must not hide every other
+        // result, so a problem below the paths we were given is reported and
+        // that directory skipped.
         if depth > MAX_DEPTH {
-            return Err(DiscoverError::TooDeep(dir.to_path_buf()));
+            warn_skipped(&DiscoverError::TooDeep(dir.to_path_buf()));
+            return Ok(());
         }
-        let mut entries: Vec<_> = fs::read_dir(dir)
-            .map_err(read_err(dir))?
-            .collect::<Result<_, _>>()
-            .map_err(read_err(dir))?;
+        let entries = fs::read_dir(dir)
+            .map_err(read_err(dir))
+            .and_then(|rd| rd.collect::<Result<Vec<_>, _>>().map_err(read_err(dir)));
+        let mut entries = match entries {
+            Ok(entries) => entries,
+            Err(e) => {
+                warn_skipped(&e);
+                return Ok(());
+            }
+        };
         entries.sort_by_key(|e| e.file_name());
 
         entries.into_iter().try_for_each(|entry| {
             let path = entry.path();
-            let file_type = entry.file_type().map_err(read_err(&path))?;
+            let Ok(file_type) = entry.file_type() else {
+                warn_skipped(&read_err(&path)(io::Error::other("cannot stat")));
+                return Ok(());
+            };
             let name = entry.file_name();
-            let name = name.to_string_lossy();
+            // Targets travel as slash-separated strings, so a name that does
+            // not survive that round trip would point at a different file.
+            let Some(name) = name.to_str().filter(|n| !n.contains('\\')) else {
+                eprintln!(
+                    "lintmatter: skipping {}: name is not plain UTF-8 without backslashes",
+                    escape_control(&path.to_string_lossy())
+                );
+                return Ok(());
+            };
             let rel = || to_slash(path.strip_prefix(root).unwrap_or(&path));
 
             // A link in a tree we were pointed at can name anything the process
@@ -155,13 +185,13 @@ impl Discoverer {
                 return Ok(());
             }
             if file_type.is_dir() {
-                if SKIP_DIRS.contains(&name.as_ref()) || self.excluded(&name, &rel) {
+                if SKIP_DIRS.contains(&name) || self.excluded(name, &rel) {
                     return Ok(());
                 }
                 return self.walk(root, &path, depth + 1);
             }
             if let Some(kind) = kind_for(&path)
-                && !self.excluded(&name, &rel)
+                && !self.excluded(name, &rel)
             {
                 self.add(&path, kind, root);
             }
@@ -177,6 +207,11 @@ impl Discoverer {
     }
 }
 
+/// Says on stderr what was left out and why; the run carries on.
+fn warn_skipped(e: &DiscoverError) {
+    eprintln!("lintmatter: skipping: {}", escape_control(&e.to_string()));
+}
+
 fn matches_any(patterns: &[Pattern], name: &str, rel: &str) -> bool {
     patterns.iter().any(|p| p.matches(name) || p.matches(rel))
 }
@@ -185,6 +220,9 @@ fn matches_any(patterns: &[Pattern], name: &str, rel: &str) -> bool {
 /// on every path. The message names no flag because an exclude can come from
 /// `--exclude` or from the config file's `exclude:`.
 fn compile_globs(globs: &[String]) -> Result<Vec<Pattern>, DiscoverError> {
+    if globs.len() > MAX_EXCLUDES || globs.iter().any(|g| g.len() > MAX_PATTERN_LEN) {
+        return Err(DiscoverError::TooManyExcludes);
+    }
     globs
         .iter()
         .map(|g| {
@@ -378,14 +416,19 @@ mod tests {
         fs::write(ok_dir.path().join(&shallow).join("AGENTS.md"), "deep").unwrap();
 
         // When
-        let err = find(&[dir.path().to_string_lossy().to_string()], &[])
-            .unwrap_err()
-            .to_string();
+        let too_deep = find(&[dir.path().to_string_lossy().to_string()], &[]).unwrap();
         let targets = find(&[ok_dir.path().to_string_lossy().to_string()], &[]).unwrap();
 
         // Then
-        assert!(err.contains("directories deep"), "{err}");
+        assert!(too_deep.is_empty());
         assert_eq!(targets.len(), 1);
+
+        // And the limits on excludes
+        let many = vec!["x".to_string(); MAX_EXCLUDES + 1];
+        assert!(matches!(
+            find(&[], &many),
+            Err(DiscoverError::TooManyExcludes)
+        ));
     }
 
     #[test]
