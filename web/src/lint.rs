@@ -336,6 +336,7 @@ mod tests {
 
     #[test]
     fn budgets_become_flags_in_flag_order() {
+        // Given
         let req = request(
             r#"{"url":"https://github.com/o/r","budgets":{
                 "max_agents_tokens":1200,
@@ -343,8 +344,13 @@ mod tests {
                 "max_skill_name_tokens":8,
                 "max_skill_description_tokens":64}}"#,
         );
+
+        // When
+        let flags = req.budgets.flags();
+
+        // Then
         assert_eq!(
-            req.budgets.flags(),
+            flags,
             [
                 "--max-agents-tokens",
                 "1200",
@@ -362,39 +368,53 @@ mod tests {
     /// that is what leaves the clone's own `.lintmatter.yaml` in charge of it.
     #[test]
     fn omitted_budgets_pass_no_flags() {
-        assert_eq!(
-            request(r#"{"url":"https://github.com/o/r"}"#)
-                .budgets
-                .flags(),
-            Vec::<String>::new()
-        );
-
+        // Given
+        let omitted = request(r#"{"url":"https://github.com/o/r"}"#);
         let partial =
             request(r#"{"url":"https://github.com/o/r","budgets":{"max_skill_tokens":10}}"#);
-        assert_eq!(partial.budgets.flags(), ["--max-skill-tokens", "10"]);
+
+        // When
+        let omitted_flags = omitted.budgets.flags();
+        let partial_flags = partial.budgets.flags();
+
+        // Then
+        assert_eq!(omitted_flags, Vec::<String>::new());
+        assert_eq!(partial_flags, ["--max-skill-tokens", "10"]);
     }
 
     #[test]
     fn validate_rejects_budgets_outside_the_allowed_range() {
-        assert!(Budgets::defaults().validate().is_ok());
+        // Given
+        let defaults = Budgets::defaults();
+        let zero = Budgets {
+            max_skill_tokens: Some(0),
+            ..Budgets::default()
+        };
+        let out_of_range = [-1, MAX_BUDGET + 1];
+
+        // When
+        let defaults_result = defaults.validate();
+        let zero_result = zero.validate();
+        let errors: Vec<String> = out_of_range
+            .iter()
+            .map(|bad| {
+                Budgets {
+                    max_agents_tokens: Some(*bad),
+                    ..Budgets::default()
+                }
+                .validate()
+                .unwrap_err()
+                .to_string()
+            })
+            .collect();
+
+        // Then
+        assert!(defaults_result.is_ok());
         assert!(
-            Budgets {
-                max_skill_tokens: Some(0),
-                ..Budgets::default()
-            }
-            .validate()
-            .is_ok(),
+            zero_result.is_ok(),
             "0 disables a check and must stay accepted"
         );
-
-        for bad in [-1, MAX_BUDGET + 1] {
-            let err = Budgets {
-                max_agents_tokens: Some(bad),
-                ..Budgets::default()
-            }
-            .validate()
-            .unwrap_err()
-            .to_string();
+        for err in errors {
             assert!(err.contains("--max-agents-tokens"), "{err}");
         }
     }
@@ -403,8 +423,15 @@ mod tests {
     /// server actually enforces.
     #[test]
     fn the_budget_error_names_the_real_ceiling() {
+        // Given
+        let ceiling = MAX_BUDGET.to_string();
+
+        // When
+        let names_ceiling = INVALID_BUDGET_ERROR.contains(&ceiling);
+
+        // Then
         assert!(
-            INVALID_BUDGET_ERROR.contains(&MAX_BUDGET.to_string()),
+            names_ceiling,
             "{INVALID_BUDGET_ERROR:?} does not name {MAX_BUDGET}"
         );
     }
@@ -413,7 +440,13 @@ mod tests {
     /// page is quietly lying about what it enforces.
     #[test]
     fn defaults_are_the_linters_own() {
-        let json = serde_json::to_value(Budgets::defaults()).unwrap();
+        // Given
+        let defaults = Budgets::defaults();
+
+        // When
+        let json = serde_json::to_value(defaults).unwrap();
+
+        // Then
         assert_eq!(json["max_agents_tokens"], DEFAULT_MAX_AGENTS_TOKENS);
         assert_eq!(json["max_skill_tokens"], DEFAULT_MAX_SKILL_TOKENS);
         assert_eq!(json["max_skill_name_tokens"], DEFAULT_MAX_SKILL_NAME_TOKENS);

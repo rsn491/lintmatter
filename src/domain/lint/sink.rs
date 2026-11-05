@@ -113,8 +113,15 @@ mod tests {
     /// new id has to be given a part before this passes.
     #[test]
     fn every_rule_belongs_to_a_score_part() {
-        for rule in RULES.iter() {
-            assert!(part(rule).is_some(), "{rule} is not assigned a score part");
+        // Given
+        let rules = RULES.iter();
+
+        // When
+        let parts: Vec<(&&str, Option<Part>)> = rules.map(|rule| (rule, part(rule))).collect();
+
+        // Then
+        for (rule, part) in parts {
+            assert!(part.is_some(), "{rule} is not assigned a score part");
         }
     }
 }

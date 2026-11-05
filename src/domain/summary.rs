@@ -45,8 +45,15 @@ mod tests {
 
     #[test]
     fn summarize_totals_across_results() {
+        // Given
+        let results = results();
+
+        // When
+        let got = summarize(&results);
+
+        // Then
         assert_eq!(
-            summarize(&results()),
+            got,
             Summary {
                 files: 2,
                 files_with_errors: 1,

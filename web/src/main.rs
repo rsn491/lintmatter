@@ -137,8 +137,9 @@ mod tests {
     /// the field names and the band classes the page depends on.
     #[test]
     fn index_renders_the_report_scores() {
+        // Given
         let html = include_str!("index.html");
-        for needle in [
+        let needles = [
             "summary.score",
             "file.score",
             "score-card",
@@ -147,8 +148,14 @@ mod tests {
             "score-yellow",
             "score-orange",
             "score-red",
-        ] {
-            assert!(html.contains(needle), "index.html is missing {needle:?}");
+        ];
+
+        for needle in needles {
+            // When
+            let found = html.contains(needle);
+
+            // Then
+            assert!(found, "index.html is missing {needle:?}");
         }
     }
 
@@ -156,28 +163,38 @@ mod tests {
     /// input that lost its id would leave that budget with no field at all.
     #[test]
     fn index_has_an_input_for_every_budget() {
+        // Given
         let html = include_str!("index.html");
-        for field in [
+        let fields = [
             "max_agents_tokens",
             "max_skill_tokens",
             "max_skill_name_tokens",
             "max_skill_description_tokens",
-        ] {
-            assert!(
-                html.contains(&format!("id=\"{field}\"")),
-                "index.html has no input for {field:?}"
-            );
+        ];
+
+        for field in fields {
+            // When
+            let found = html.contains(&format!("id=\"{field}\""));
+
+            // Then
+            assert!(found, "index.html has no input for {field:?}");
         }
     }
 
     #[test]
     fn index_has_install_methods_and_plain_wordmark() {
+        // Given
         let html = include_str!("index.html");
         let curl_command = "curl -LsSf https://github.com/rsn491/lintmatter/releases/latest/download/lintmatter-installer.sh | sh";
         let brew_command = "brew install rsn491/tap/lintmatter";
         let cargo_command = "cargo install lintmatter";
         let npm_command = "npm install -g lintmatter";
 
+        // When
+        let scorecard_pos = html.find("src=\"/scorecard.gif\"");
+        let features_pos = html.find("class=\"features\"");
+
+        // Then
         assert!(
             html.contains(curl_command),
             "index.html is missing the curl installer command"
@@ -218,7 +235,7 @@ mod tests {
             "index.html is missing the compact tool description"
         );
         assert!(
-            html.find("src=\"/scorecard.gif\"") < html.find("class=\"features\""),
+            scorecard_pos < features_pos,
             "feature cards should follow the scorecard demo"
         );
         assert_eq!(&SCORECARD_GIF[..6], b"GIF89a");
@@ -232,14 +249,21 @@ mod tests {
 
     #[test]
     fn index_uses_the_thumbnail_for_icons_and_link_previews() {
+        // Given
         let html = include_str!("index.html");
-        for needle in [
+        let needles = [
             "rel=\"icon\" type=\"image/png\" href=\"/favicon.png\"",
             "rel=\"apple-touch-icon\" href=\"/favicon.png\"",
             "property=\"og:image\" content=\"https://lintmatter.onrender.com/thumbnail.png\"",
             "name=\"twitter:image\" content=\"https://lintmatter.onrender.com/thumbnail.png\"",
-        ] {
-            assert!(html.contains(needle), "index.html is missing {needle:?}");
+        ];
+
+        for needle in needles {
+            // When
+            let found = html.contains(needle);
+
+            // Then
+            assert!(found, "index.html is missing {needle:?}");
         }
     }
 
@@ -247,17 +271,24 @@ mod tests {
     /// placeholder the form would then read as `undefined`.
     #[test]
     fn render_index_substitutes_the_budget_settings() {
-        let rendered = render_index(include_str!("index.html"));
+        // Given
+        let template = include_str!("index.html");
+        let needles = [
+            format!("\"max_agents_tokens\":{DEFAULT_MAX_AGENTS_TOKENS}"),
+            format!("\"max_skill_tokens\":{DEFAULT_MAX_SKILL_TOKENS}"),
+            format!("\"max_skill_name_tokens\":{DEFAULT_MAX_SKILL_NAME_TOKENS}"),
+            format!("\"max_skill_description_tokens\":{DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS}"),
+        ];
+
+        // When
+        let rendered = render_index(template);
+
+        // Then
         assert!(
             !rendered.contains(BUDGETS_PLACEHOLDER),
             "the placeholder survived rendering"
         );
-        for needle in [
-            &format!("\"max_agents_tokens\":{DEFAULT_MAX_AGENTS_TOKENS}"),
-            &format!("\"max_skill_tokens\":{DEFAULT_MAX_SKILL_TOKENS}"),
-            &format!("\"max_skill_name_tokens\":{DEFAULT_MAX_SKILL_NAME_TOKENS}"),
-            &format!("\"max_skill_description_tokens\":{DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS}"),
-        ] {
+        for needle in &needles {
             assert!(
                 rendered.contains(needle),
                 "rendered page is missing {needle}"
@@ -267,10 +298,14 @@ mod tests {
 
     #[test]
     fn page_variants_select_the_right_view() {
+        // Given
         let template = include_str!("index.html");
+
+        // When
         let landing = render_page(template, "landing", "lintmatter");
         let demo = render_page(template, "demo", "Try lintmatter");
 
+        // Then
         assert!(landing.contains("<body class=\"landing\">"));
         assert!(landing.contains("<title>lintmatter</title>"));
         assert!(landing.contains("A linter for agentic context"));
@@ -285,6 +320,13 @@ mod tests {
     #[test]
     #[should_panic(expected = "no longer contains")]
     fn render_index_rejects_a_page_without_the_placeholder() {
-        render_index("<html>no budgets here</html>");
+        // Given
+        let template = "<html>no budgets here</html>";
+
+        // When
+        render_index(template);
+
+        // Then
+        unreachable!("render_index should have panicked");
     }
 }

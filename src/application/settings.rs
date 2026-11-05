@@ -110,11 +110,16 @@ mod tests {
 
     #[test]
     fn file_fills_in_what_the_flags_leave_unset() {
+        // Given
         let file = Settings {
             max_skill_tokens: Some(7),
             ..Default::default()
         };
+
+        // When
         let resolved = resolve(Settings::default(), file, false, vec![]);
+
+        // Then
         assert_eq!(resolved.config.max_skill_tokens, 7);
         assert_eq!(resolved.config.max_agents_tokens, DEFAULT_MAX_AGENTS_TOKENS);
         assert_eq!(resolved.paths, vec![".".to_string()]);
@@ -122,6 +127,7 @@ mod tests {
 
     #[test]
     fn flags_win_and_lists_accumulate() {
+        // Given
         let flags = Settings {
             max_skill_tokens: Some(9),
             excludes: vec!["b".into()],
@@ -134,7 +140,11 @@ mod tests {
             disabled: vec!["name.length".into()],
             ..Default::default()
         };
+
+        // When
         let resolved = resolve(flags, file, true, vec!["x".into()]);
+
+        // Then
         assert_eq!(resolved.config.max_skill_tokens, 9);
         assert_eq!(resolved.excludes, vec!["a", "b"]);
         assert_eq!(resolved.config.disabled, vec!["name.length", "name.format"]);
@@ -144,8 +154,16 @@ mod tests {
 
     #[test]
     fn unknown_rules_are_sorted_and_quoted() {
-        assert!(check_rule_names(&["name.format".into()]).is_ok());
-        let err = check_rule_names(&["zz".into(), "aa".into()]).unwrap_err();
+        // Given
+        let known = ["name.format".to_string()];
+        let unknown = ["zz".to_string(), "aa".to_string()];
+
+        // When
+        let ok = check_rule_names(&known);
+        let err = check_rule_names(&unknown).unwrap_err();
+
+        // Then
+        assert!(ok.is_ok());
         assert_eq!(err.to_string(), "unknown rule \"aa\", \"zz\"");
     }
 }

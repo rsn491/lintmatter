@@ -124,6 +124,7 @@ mod tests {
 
     #[test]
     fn skill_frontmatter_rules() {
+        // Given
         let long_name = "a".repeat(MAX_NAME_CHARS + 1);
         let long_desc = "x".repeat(MAX_DESCRIPTION_CHARS + 1);
         let cases: Vec<(&str, &str, String, Vec<&str>)> = vec![
@@ -263,50 +264,59 @@ mod tests {
 
         for (name, skill_dir_name, src, want_rules) in cases {
             let (_base, target) = write_skill(skill_dir_name, &src);
+
+            // When
             let res = linter(generous_config()).file(&target).unwrap();
+
+            // Then
             assert_eq!(rule_ids(&res.findings), want_rules, "{name}");
         }
     }
 
     #[test]
     fn token_budgets() {
+        // Given
         let (_base, target) = write_skill("budgeted", VALID_SKILL);
+        let mut content_cfg = generous_config();
+        content_cfg.max_skill_tokens = 1;
+        let mut off_cfg = generous_config();
+        off_cfg.max_skill_tokens = 0;
+        let mut name_cfg = generous_config();
+        name_cfg.max_skill_name_tokens = 1;
+        let mut description_cfg = generous_config();
+        description_cfg.max_skill_description_tokens = 2;
 
-        let mut cfg = generous_config();
-        cfg.max_skill_tokens = 1;
-        let res = linter(cfg).file(&target).unwrap();
+        // When
+        let content_res = linter(content_cfg).file(&target).unwrap();
+        let off_res = linter(off_cfg).file(&target).unwrap();
+        let name_res = linter(name_cfg).file(&target).unwrap();
+        let description_res = linter(description_cfg).file(&target).unwrap();
+        let generous_res = linter(generous_config()).file(&target).unwrap();
+
+        // Then
         assert_eq!(
-            rule_ids(&res.findings),
+            rule_ids(&content_res.findings),
             vec![RULE_NAME_DIR_MISMATCH, RULE_TOKENS_CONTENT]
         );
-
-        let mut cfg = generous_config();
-        cfg.max_skill_tokens = 0;
-        let res = linter(cfg).file(&target).unwrap();
-        assert_eq!(rule_ids(&res.findings), vec![RULE_NAME_DIR_MISMATCH]);
-
-        let mut cfg = generous_config();
-        cfg.max_skill_name_tokens = 1;
-        let res = linter(cfg).file(&target).unwrap();
+        assert_eq!(rule_ids(&off_res.findings), vec![RULE_NAME_DIR_MISMATCH]);
         assert_eq!(
-            rule_ids(&res.findings),
+            rule_ids(&name_res.findings),
             vec![RULE_NAME_DIR_MISMATCH, RULE_TOKENS_NAME]
         );
-
-        let mut cfg = generous_config();
-        cfg.max_skill_description_tokens = 2;
-        let res = linter(cfg).file(&target).unwrap();
         assert_eq!(
-            rule_ids(&res.findings),
+            rule_ids(&description_res.findings),
             vec![RULE_NAME_DIR_MISMATCH, RULE_TOKENS_DESCRIPTION]
         );
-
-        let res = linter(generous_config()).file(&target).unwrap();
-        assert!(res.tokens.content > 0 && res.tokens.name > 0 && res.tokens.description > 0);
+        assert!(
+            generous_res.tokens.content > 0
+                && generous_res.tokens.name > 0
+                && generous_res.tokens.description > 0
+        );
     }
 
     #[test]
     fn per_kind_content_budget() {
+        // Given
         let base = tempfile::tempdir().unwrap();
         let body = "some filler prose to spend tokens on. ".repeat(20);
         let agents = agents_target(base.path(), &body);
@@ -314,28 +324,29 @@ mod tests {
             "kinded",
             &format!("---\nname: kinded\ndescription: A skill with a body.\n---\n{body}"),
         );
-
         let mut cfg = generous_config();
         cfg.max_skill_tokens = 10000;
         cfg.max_agents_tokens = 1;
         let l = linter(cfg.clone());
+        let mut flipped_cfg = cfg;
+        flipped_cfg.max_agents_tokens = 0;
+        flipped_cfg.max_skill_tokens = 1;
 
+        // When
         let agents_res = l.file(&agents).unwrap();
-        assert_eq!(agents_res.errors(), 1);
-
         let skill_res = l.file(&skill).unwrap();
+        let flipped_skill_res = linter(flipped_cfg).file(&skill).unwrap();
+
+        // Then
+        assert_eq!(agents_res.errors(), 1);
         assert!(
             !skill_res
                 .findings
                 .iter()
                 .any(|f| f.rule == RULE_TOKENS_CONTENT)
         );
-
-        cfg.max_agents_tokens = 0;
-        cfg.max_skill_tokens = 1;
-        let skill_res = linter(cfg).file(&skill).unwrap();
         assert!(
-            skill_res
+            flipped_skill_res
                 .findings
                 .iter()
                 .any(|f| f.rule == RULE_TOKENS_CONTENT)
@@ -344,28 +355,37 @@ mod tests {
 
     #[test]
     fn agents_frontmatter_is_not_validated() {
+        // Given
         let base = tempfile::tempdir().unwrap();
         let src =
             "---\ntitle: Project instructions\nowner: infra\n---\n\n# Instructions\n\nBody.\n";
         let target = agents_target(base.path(), src);
 
+        // When
         let res = linter(generous_config()).file(&target).unwrap();
+
+        // Then
         assert!(res.findings.is_empty());
         assert!(res.tokens.content > 0);
     }
 
     #[test]
     fn agents_unterminated_frontmatter_is_reported() {
+        // Given
         let base = tempfile::tempdir().unwrap();
         let src = "---\ntitle: Project instructions\n\n# Instructions never closed\n";
         let target = agents_target(base.path(), src);
 
+        // When
         let res = linter(generous_config()).file(&target).unwrap();
+
+        // Then
         assert_eq!(rule_ids(&res.findings), vec![RULE_FRONTMATTER_UNTERMINATED]);
     }
 
     #[test]
     fn agents_frontmatter_excluded_from_content() {
+        // Given
         let base = tempfile::tempdir().unwrap();
         let fm_src =
             "---\ntitle: A fairly wordy front matter block that costs real tokens\n---\nBody.\n";
@@ -374,34 +394,42 @@ mod tests {
         let bare = agents_target(base2.path(), "Body.\n");
 
         let l = linter(generous_config());
+
+        // When
         let with_res = l.file(&with_fm).unwrap();
         let bare_res = l.file(&bare).unwrap();
+
+        // Then
         assert_eq!(with_res.tokens.content, bare_res.tokens.content);
     }
 
     #[test]
     fn with_counter_substitutes_the_token_counter() {
+        // Given
         let (_base, target) = write_skill("counted", VALID_SKILL);
-
         let mut cfg = generous_config();
         cfg.max_skill_tokens = 10;
-        let res = linter(cfg.clone())
+
+        // When
+        let over = linter(cfg.clone())
             .with_counter(Box::new(Fixed(11)))
             .file(&target)
             .unwrap();
-        assert_eq!(res.tokens.content, 11);
-        assert!(res.findings.iter().any(|f| f.rule == RULE_TOKENS_CONTENT));
-
-        let res = linter(cfg)
+        let under = linter(cfg)
             .with_counter(Box::new(Fixed(9)))
             .file(&target)
             .unwrap();
-        assert_eq!(res.tokens.content, 9);
-        assert!(!res.findings.iter().any(|f| f.rule == RULE_TOKENS_CONTENT));
+
+        // Then
+        assert_eq!(over.tokens.content, 11);
+        assert!(over.findings.iter().any(|f| f.rule == RULE_TOKENS_CONTENT));
+        assert_eq!(under.tokens.content, 9);
+        assert!(!under.findings.iter().any(|f| f.rule == RULE_TOKENS_CONTENT));
     }
 
     #[test]
     fn name_dir_mismatch_uses_injected_cwd() {
+        // Given
         // name.dir-mismatch deliberately ignores a skill sitting directly in
         // the working directory, since a loose SKILL.md is named for its
         // project rather than its folder. Injecting the cwd is what makes that
@@ -413,20 +441,37 @@ mod tests {
         );
         let holding_dir = Path::new(&target.path).parent().unwrap().to_path_buf();
 
-        let res = linter_in(generous_config(), holding_dir)
+        // When
+        let in_holding_dir = linter_in(generous_config(), holding_dir)
             .file(&target)
             .unwrap();
-        assert!(res.findings.is_empty(), "{:?}", rule_ids(&res.findings));
+        let in_base = linter_in(generous_config(), base.path().to_path_buf())
+            .file(&target)
+            .unwrap();
 
-        let res = linter_in(generous_config(), base.path().to_path_buf())
-            .file(&target)
-            .unwrap();
-        assert_eq!(rule_ids(&res.findings), vec![RULE_NAME_DIR_MISMATCH]);
+        // Then
+        assert!(
+            in_holding_dir.findings.is_empty(),
+            "{:?}",
+            rule_ids(&in_holding_dir.findings)
+        );
+        assert_eq!(rule_ids(&in_base.findings), vec![RULE_NAME_DIR_MISMATCH]);
     }
 
     #[test]
     fn default_config_enforces_budgets() {
+        // Given
+        let base = tempfile::tempdir().unwrap();
+        let body = "some filler prose to spend tokens on. ".repeat(500);
+        let target = agents_target(base.path(), &body);
+
+        // When
         let cfg = Config::default();
+        // The point of the hand-written Default: reaching for it must not
+        // hand back a linter that checks nothing.
+        let res = linter(Config::default()).file(&target).unwrap();
+
+        // Then
         assert_eq!(cfg.max_agents_tokens, DEFAULT_MAX_AGENTS_TOKENS);
         assert_eq!(cfg.max_skill_tokens, DEFAULT_MAX_SKILL_TOKENS);
         assert_eq!(cfg.max_skill_name_tokens, DEFAULT_MAX_SKILL_NAME_TOKENS);
@@ -434,37 +479,34 @@ mod tests {
             cfg.max_skill_description_tokens,
             DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS
         );
-
-        // The point of the hand-written Default: reaching for it must not
-        // hand back a linter that checks nothing.
-        let base = tempfile::tempdir().unwrap();
-        let body = "some filler prose to spend tokens on. ".repeat(500);
-        let target = agents_target(base.path(), &body);
-        let res = linter(Config::default()).file(&target).unwrap();
         assert_eq!(rule_ids(&res.findings), vec![RULE_TOKENS_CONTENT]);
     }
 
     #[test]
     fn strict_promotes_warnings() {
+        // Given
         let (_base, target) = write_skill(
             "mismatched-dir",
             "---\nname: other-name\ndescription: A skill in a mismatched directory.\n---\nBody.\n",
         );
 
-        let cfg = generous_config();
-        let res = linter(cfg.clone()).file(&target).unwrap();
-        assert_eq!(res.errors(), 0);
-        assert_eq!(res.warnings(), 1);
+        let mut strict_cfg = generous_config();
+        strict_cfg.strict = true;
 
-        let mut cfg = cfg;
-        cfg.strict = true;
-        let res = linter(cfg).file(&target).unwrap();
-        assert_eq!(res.errors(), 1);
-        assert_eq!(res.warnings(), 0);
+        // When
+        let lenient = linter(generous_config()).file(&target).unwrap();
+        let strict = linter(strict_cfg).file(&target).unwrap();
+
+        // Then
+        assert_eq!(lenient.errors(), 0);
+        assert_eq!(lenient.warnings(), 1);
+        assert_eq!(strict.errors(), 1);
+        assert_eq!(strict.warnings(), 0);
     }
 
     #[test]
     fn disable_skips_rules() {
+        // Given
         let (_base, target) = write_skill(
             "mismatched-dir",
             "---\nname: Bad_Name\ndescription: A skill with an invalid name.\n---\nBody.\n",
@@ -475,18 +517,26 @@ mod tests {
             RULE_NAME_FORMAT.to_string(),
             RULE_NAME_DIR_MISMATCH.to_string(),
         ];
+
+        // When
         let res = linter(cfg).file(&target).unwrap();
+
+        // Then
         assert!(res.findings.is_empty());
     }
 
     #[test]
     fn findings_carry_file_and_line() {
+        // Given
         let (_base, target) = write_skill(
             "lines",
             "---\nname: Bad_Name\ndescription: A skill with an invalid name.\n---\nBody.\n",
         );
 
+        // When
         let res = linter(generous_config()).file(&target).unwrap();
+
+        // Then
         assert_eq!(res.path, target.path);
         for f in &res.findings {
             if f.rule == RULE_NAME_FORMAT {
@@ -497,55 +547,65 @@ mod tests {
 
     #[test]
     fn file_reference_rule() {
-        {
-            let dir = tempfile::tempdir().unwrap();
-            write_file(dir.path(), "notes.md", "notes");
-            let src = "# Instructions\n\nSee [notes](./notes.md) for details.\n";
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert!(res.findings.is_empty());
-        }
-        {
-            let dir = tempfile::tempdir().unwrap();
-            let src = "# Instructions\n\nSee [notes](./notes.md) for details.\n";
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
-        }
-        {
-            let dir = tempfile::tempdir().unwrap();
-            let src = "See [docs](https://example.com/x), [mail](mailto:a@example.com) and [section](#heading).\n";
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert!(res.findings.is_empty());
-        }
-        {
-            let dir = tempfile::tempdir().unwrap();
-            let src = "Example syntax:\n\n```md\n[example](./missing.md)\n```\n";
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert!(res.findings.is_empty());
-        }
-        {
-            let (_base, target) = write_skill(
-                "with-link",
-                "---\nname: with-link\ndescription: A skill that references a missing helper script.\n---\nSee [helper](./helper.sh).\n",
-            );
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
-        }
-        {
-            let dir = tempfile::tempdir().unwrap();
-            let src = "# Instructions\n\nIntro line.\n\nSee [notes](./notes.md).\n";
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert_eq!(res.findings.len(), 1);
-            assert_eq!(res.findings[0].line, 5);
-        }
+        // Given
+        let existing_dir = tempfile::tempdir().unwrap();
+        write_file(existing_dir.path(), "notes.md", "notes");
+        let existing = agents_target(
+            existing_dir.path(),
+            "# Instructions\n\nSee [notes](./notes.md) for details.\n",
+        );
+        let missing_dir = tempfile::tempdir().unwrap();
+        let missing = agents_target(
+            missing_dir.path(),
+            "# Instructions\n\nSee [notes](./notes.md) for details.\n",
+        );
+        let external_dir = tempfile::tempdir().unwrap();
+        let external = agents_target(
+            external_dir.path(),
+            "See [docs](https://example.com/x), [mail](mailto:a@example.com) and [section](#heading).\n",
+        );
+        let fenced_dir = tempfile::tempdir().unwrap();
+        let fenced = agents_target(
+            fenced_dir.path(),
+            "Example syntax:\n\n```md\n[example](./missing.md)\n```\n",
+        );
+        let (_skill_base, skill) = write_skill(
+            "with-link",
+            "---\nname: with-link\ndescription: A skill that references a missing helper script.\n---\nSee [helper](./helper.sh).\n",
+        );
+        let lined_dir = tempfile::tempdir().unwrap();
+        let lined = agents_target(
+            lined_dir.path(),
+            "# Instructions\n\nIntro line.\n\nSee [notes](./notes.md).\n",
+        );
+
+        // When
+        let existing_res = linter(generous_config()).file(&existing).unwrap();
+        let missing_res = linter(generous_config()).file(&missing).unwrap();
+        let external_res = linter(generous_config()).file(&external).unwrap();
+        let fenced_res = linter(generous_config()).file(&fenced).unwrap();
+        let skill_res = linter(generous_config()).file(&skill).unwrap();
+        let lined_res = linter(generous_config()).file(&lined).unwrap();
+
+        // Then
+        assert!(existing_res.findings.is_empty());
+        assert_eq!(
+            rule_ids(&missing_res.findings),
+            vec![RULE_FILE_REFERENCE_MISSING]
+        );
+        assert!(external_res.findings.is_empty());
+        assert!(fenced_res.findings.is_empty());
+        assert_eq!(
+            rule_ids(&skill_res.findings),
+            vec![RULE_FILE_REFERENCE_MISSING]
+        );
+        assert_eq!(lined_res.findings.len(), 1);
+        assert_eq!(lined_res.findings[0].line, 5);
     }
 
     #[test]
     fn file_references_outside_the_linted_tree_are_skipped() {
+        // Given
         // Escapes are skipped whether or not the target exists. lintmatter runs
         // in CI over checkouts it does not trust, and a finding that
         // distinguished "exists" from "does not exist" above the root would
@@ -567,25 +627,38 @@ mod tests {
             ),
             ("code span escaping the root", "Read `../../outside.md`.\n"),
         ];
-        for (name, src) in escaping {
-            let target = agents_target_under(&root, &sub, src);
-            let res = linter(generous_config()).file(&target).unwrap();
+        // Control: a missing reference that stays inside the tree is still
+        // reported, so the cases above are not passing vacuously.
+        let control = agents_target_under(&root, &sub, "See [x](./nowhere.md).\n");
+
+        // When
+        // The control is linted first: every case writes the same AGENTS.md.
+        let control_res = linter(generous_config()).file(&control).unwrap();
+        let escaping_res: Vec<_> = escaping
+            .iter()
+            .map(|(name, src)| {
+                let target = agents_target_under(&root, &sub, src);
+                (*name, linter(generous_config()).file(&target).unwrap())
+            })
+            .collect();
+
+        // Then
+        for (name, res) in &escaping_res {
             assert!(
                 res.findings.is_empty(),
                 "{name}: {:?}",
                 rule_ids(&res.findings)
             );
         }
-
-        // Control: a missing reference that stays inside the tree is still
-        // reported, so the cases above are not passing vacuously.
-        let target = agents_target_under(&root, &sub, "See [x](./nowhere.md).\n");
-        let res = linter(generous_config()).file(&target).unwrap();
-        assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
+        assert_eq!(
+            rule_ids(&control_res.findings),
+            vec![RULE_FILE_REFERENCE_MISSING]
+        );
     }
 
     #[test]
     fn file_reference_rule_nested_fences() {
+        // Given
         // A fence closes only on the same marker, at least as long, with no
         // info string. Each case pairs a source file with the rules it should
         // produce, so both directions of the old toggle bug are covered: the
@@ -627,66 +700,84 @@ mod tests {
         for (name, src, want) in cases {
             let dir = tempfile::tempdir().unwrap();
             let target = agents_target(dir.path(), src);
+
+            // When
             let res = linter(generous_config()).file(&target).unwrap();
+
+            // Then
             assert_eq!(rule_ids(&res.findings), *want, "{name}");
         }
     }
 
     #[test]
     fn file_reference_rule_code_spans() {
-        {
-            // Path-shaped inline code span pointing at a missing file inside
-            // the tree.
-            let dir = tempfile::tempdir().unwrap();
-            let sub = dir.path().join("sub");
-            fs::create_dir_all(&sub).unwrap();
-            let src = "Read instructions from `../planner_instructions.md`.\n";
-            let target = agents_target_under(dir.path(), &sub, src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
-        }
-        {
-            // Same reference, but the file exists. A `../` hop that lands back
-            // inside the linted tree must still be checked -- this is the
-            // guard that skipping escapes did not swallow ordinary references.
-            let dir = tempfile::tempdir().unwrap();
-            let sub = dir.path().join("sub");
-            fs::create_dir_all(&sub).unwrap();
-            write_file(dir.path(), "planner_instructions.md", "notes");
-            let src = "Read instructions from `../planner_instructions.md`.\n";
-            let target = agents_target_under(dir.path(), &sub, src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert!(res.findings.is_empty());
-        }
-        {
-            // Code spans that are not path-shaped are left alone.
-            let dir = tempfile::tempdir().unwrap();
-            let src = "Run `cargo test`, check `--strict`, or see `notes` and `./bin/lint`.\n";
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert!(res.findings.is_empty());
-        }
-        {
-            // A link and a code span pointing at the same missing target on
-            // one line report once, not twice.
-            let dir = tempfile::tempdir().unwrap();
-            let src = "See [it](./missing.md) or `./missing.md`.\n";
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert_eq!(rule_ids(&res.findings), vec![RULE_FILE_REFERENCE_MISSING]);
-        }
-        {
-            // Code spans inside fenced code blocks are still ignored.
-            let dir = tempfile::tempdir().unwrap();
-            let src = "Example:\n\n```md\nSee `../missing.md`.\n```\n";
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert!(res.findings.is_empty());
-        }
+        // Given
+        // Path-shaped inline code span pointing at a missing file inside the
+        // tree.
+        let missing_dir = tempfile::tempdir().unwrap();
+        let missing_sub = missing_dir.path().join("sub");
+        fs::create_dir_all(&missing_sub).unwrap();
+        let missing = agents_target_under(
+            missing_dir.path(),
+            &missing_sub,
+            "Read instructions from `../planner_instructions.md`.\n",
+        );
+        // Same reference, but the file exists. A `../` hop that lands back
+        // inside the linted tree must still be checked -- this is the guard
+        // that skipping escapes did not swallow ordinary references.
+        let present_dir = tempfile::tempdir().unwrap();
+        let present_sub = present_dir.path().join("sub");
+        fs::create_dir_all(&present_sub).unwrap();
+        write_file(present_dir.path(), "planner_instructions.md", "notes");
+        let present = agents_target_under(
+            present_dir.path(),
+            &present_sub,
+            "Read instructions from `../planner_instructions.md`.\n",
+        );
+        // Code spans that are not path-shaped are left alone.
+        let plain_dir = tempfile::tempdir().unwrap();
+        let plain = agents_target(
+            plain_dir.path(),
+            "Run `cargo test`, check `--strict`, or see `notes` and `./bin/lint`.\n",
+        );
+        // A link and a code span pointing at the same missing target on one
+        // line report once, not twice.
+        let dup_dir = tempfile::tempdir().unwrap();
+        let dup = agents_target(
+            dup_dir.path(),
+            "See [it](./missing.md) or `./missing.md`.\n",
+        );
+        // Code spans inside fenced code blocks are still ignored.
+        let fenced_dir = tempfile::tempdir().unwrap();
+        let fenced = agents_target(
+            fenced_dir.path(),
+            "Example:\n\n```md\nSee `../missing.md`.\n```\n",
+        );
+
+        // When
+        let missing_res = linter(generous_config()).file(&missing).unwrap();
+        let present_res = linter(generous_config()).file(&present).unwrap();
+        let plain_res = linter(generous_config()).file(&plain).unwrap();
+        let dup_res = linter(generous_config()).file(&dup).unwrap();
+        let fenced_res = linter(generous_config()).file(&fenced).unwrap();
+
+        // Then
+        assert_eq!(
+            rule_ids(&missing_res.findings),
+            vec![RULE_FILE_REFERENCE_MISSING]
+        );
+        assert!(present_res.findings.is_empty());
+        assert!(plain_res.findings.is_empty());
+        assert_eq!(
+            rule_ids(&dup_res.findings),
+            vec![RULE_FILE_REFERENCE_MISSING]
+        );
+        assert!(fenced_res.findings.is_empty());
     }
 
     #[test]
     fn file_reference_rule_links_inside_code_spans() {
+        // Given
         // Link syntax shown inside backticks is literal text, not a link, so
         // its target is not checked. A code span used as a link *label* is the
         // other direction of the same masking: that link is real and must
@@ -726,19 +817,31 @@ mod tests {
             ),
         ];
 
-        for (name, src, want) in cases {
-            let dir = tempfile::tempdir().unwrap();
-            let target = agents_target(dir.path(), src);
-            let res = linter(generous_config()).file(&target).unwrap();
-            assert_eq!(rule_ids(&res.findings), *want, "{name}");
-        }
-
         // The label case again with the file present: the link is checked, and
         // it resolves, so the case above is not passing on a parse failure.
-        let dir = tempfile::tempdir().unwrap();
-        write_file(dir.path(), "notes.md", "notes");
-        let target = agents_target(dir.path(), "See [`notes`](./notes.md).\n");
-        let res = linter(generous_config()).file(&target).unwrap();
-        assert!(res.findings.is_empty());
+        let present_dir = tempfile::tempdir().unwrap();
+        write_file(present_dir.path(), "notes.md", "notes");
+        let present = agents_target(present_dir.path(), "See [`notes`](./notes.md).\n");
+
+        // When
+        let case_res: Vec<_> = cases
+            .iter()
+            .map(|(name, src, want)| {
+                let dir = tempfile::tempdir().unwrap();
+                let target = agents_target(dir.path(), src);
+                (
+                    *name,
+                    want,
+                    linter(generous_config()).file(&target).unwrap(),
+                )
+            })
+            .collect();
+        let present_res = linter(generous_config()).file(&present).unwrap();
+
+        // Then
+        for (name, want, res) in &case_res {
+            assert_eq!(rule_ids(&res.findings), **want, "{name}");
+        }
+        assert!(present_res.findings.is_empty());
     }
 }

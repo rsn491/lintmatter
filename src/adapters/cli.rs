@@ -309,33 +309,32 @@ mod tests {
 
     #[test]
     fn config_is_discovered_from_the_working_directory() {
+        // Given
         // The walk starts at the process's working directory, which tests must
         // not mutate, so exercise the discovery and merge steps directly.
         let dir = tempfile::tempdir().unwrap();
         write_config(&dir, "max-skill-tokens: 7\n");
         let nested = dir.path().join("skills/deep");
         std::fs::create_dir_all(&nested).unwrap();
-
         let flags = Flags::default();
-        let cfg = load_config(&flags, &nested).unwrap();
-        assert_eq!(cfg.max_skill_tokens, Some(7));
+        let no_config_flags = Flags {
+            no_config: true,
+            ..Default::default()
+        };
 
+        // When
+        let cfg = load_config(&flags, &nested).unwrap();
         let cli = Cli::new(flags, &nested).unwrap();
+        let skipped = load_config(&no_config_flags, &nested).unwrap();
+
+        // Then
+        assert_eq!(cfg.max_skill_tokens, Some(7));
         assert_eq!(cli.settings.config.max_skill_tokens, 7);
         assert_eq!(
             cli.settings.config.max_agents_tokens,
             DEFAULT_MAX_AGENTS_TOKENS
         );
         assert_eq!(cli.settings.paths, vec![".".to_string()]);
-
-        let skipped = load_config(
-            &Flags {
-                no_config: true,
-                ..Default::default()
-            },
-            &nested,
-        )
-        .unwrap();
         assert_eq!(skipped, Settings::default());
     }
 }

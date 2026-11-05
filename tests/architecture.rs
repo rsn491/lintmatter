@@ -370,8 +370,7 @@ fn check_files(files: &[PathBuf], layer: &Layer) -> Vec<String> {
     found
 }
 
-fn assert_clean(files: &[PathBuf], layer: &Layer) {
-    let found = check_files(files, layer);
+fn assert_no_violations(found: &[String], layer: &Layer) {
     assert!(
         found.is_empty(),
         "{} breaks the dependency rule:\n{}",
@@ -382,32 +381,62 @@ fn assert_clean(files: &[PathBuf], layer: &Layer) {
 
 #[test]
 fn domain_depends_on_nothing_outside_itself() {
-    assert_clean(&sources("domain"), &DOMAIN);
+    // Given
+    let files = sources("domain");
+
+    // When
+    let found = check_files(&files, &DOMAIN);
+
+    // Then
+    assert_no_violations(&found, &DOMAIN);
 }
 
 #[test]
 fn utils_is_a_leaf() {
-    assert_clean(&[root().join("src/utils.rs")], &UTILS);
+    // Given
+    let files = [root().join("src/utils.rs")];
+
+    // When
+    let found = check_files(&files, &UTILS);
+
+    // Then
+    assert_no_violations(&found, &UTILS);
 }
 
 #[test]
 fn application_depends_only_on_the_domain() {
-    assert_clean(&sources("application"), &APPLICATION);
+    // Given
+    let files = sources("application");
+
+    // When
+    let found = check_files(&files, &APPLICATION);
+
+    // Then
+    assert_no_violations(&found, &APPLICATION);
 }
 
 /// Guards the guard: a walk that silently found no files would pass forever.
 #[test]
 fn every_layer_has_sources() {
-    for layer in ["domain", "application", "adapters"] {
-        assert!(sources(layer).len() > 1, "no sources found for {layer}");
+    // Given
+    let layers = ["domain", "application", "adapters"];
+
+    // When
+    let counts: Vec<(&str, usize)> = layers.iter().map(|l| (*l, sources(l).len())).collect();
+    let utils_exists = root().join("src/utils.rs").is_file();
+
+    // Then
+    for (layer, count) in counts {
+        assert!(count > 1, "no sources found for {layer}");
     }
-    assert!(root().join("src/utils.rs").is_file());
+    assert!(utils_exists);
 }
 
 /// Guards the guard: each of these slipped past the substring check this
 /// replaced, or would slip past a parser that only read `use` items.
 #[test]
 fn the_checker_catches_each_way_of_naming_a_forbidden_path() {
+    // Given
     let deps = dependencies();
     let module = |m: &str| m.split("::").map(String::from).collect::<Vec<_>>();
     let cases: &[(&str, &str, &Layer, &str)] = &[
@@ -472,8 +501,12 @@ fn the_checker_catches_each_way_of_naming_a_forbidden_path() {
             "crate::domain",
         ),
     ];
+
     for (name, src, layer, want) in cases {
+        // When
         let found = check_source(src, &module("application::lint_run"), layer, &deps);
+
+        // Then
         assert!(
             found.iter().any(|f| f.contains(want)),
             "{name}: expected a finding naming {want}, got {found:?}"
@@ -485,6 +518,7 @@ fn the_checker_catches_each_way_of_naming_a_forbidden_path() {
 /// silenced by an allow-everything patch the first time it misfired.
 #[test]
 fn the_checker_accepts_what_a_layer_may_name() {
+    // Given
     let deps = dependencies();
     let module = vec!["domain".to_string(), "lint".to_string()];
     let cases: &[(&str, &str)] = &[
@@ -506,8 +540,12 @@ fn the_checker_accepts_what_a_layer_may_name() {
             "fn f(glob: u8) -> u8 { glob }",
         ),
     ];
+
     for (name, src) in cases {
+        // When
         let found = check_source(src, &module, &DOMAIN, &deps);
+
+        // Then
         assert!(found.is_empty(), "{name}: unexpected findings {found:?}");
     }
 }

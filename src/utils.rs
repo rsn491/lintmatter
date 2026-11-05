@@ -79,6 +79,7 @@ mod tests {
 
     #[test]
     fn humanize_formats_with_separators() {
+        // Given
         let cases: &[(i64, &str)] = &[
             (0, "0"),
             (7, "7"),
@@ -89,19 +90,29 @@ mod tests {
             (-42, "-42"),
         ];
         for (n, want) in cases {
-            assert_eq!(humanize(*n), *want, "humanize({n})");
+            // When
+            let got = humanize(*n);
+
+            // Then
+            assert_eq!(got, *want, "humanize({n})");
         }
     }
 
     #[test]
     fn plural_picks_the_noun() {
-        assert_eq!(plural(0, "file", "files"), "0 files");
-        assert_eq!(plural(1, "file", "files"), "1 file");
-        assert_eq!(plural(2, "file", "files"), "2 files");
+        // Given
+        let counts = [0, 1, 2];
+
+        // When
+        let got = counts.map(|n| plural(n, "file", "files"));
+
+        // Then
+        assert_eq!(got, ["0 files", "1 file", "2 files"]);
     }
 
     #[test]
     fn clean_path_normalizes_lexically() {
+        // Given
         let cases: &[(&str, &str)] = &[
             ("a/./b", "a/b"),
             ("a/b/../c", "a/c"),
@@ -112,15 +123,23 @@ mod tests {
             ("../a", "../a"),
         ];
         for (input, want) in cases {
-            assert_eq!(clean_path(Path::new(input)), PathBuf::from(want), "{input}");
+            // When
+            let got = clean_path(Path::new(input));
+
+            // Then
+            assert_eq!(got, PathBuf::from(want), "{input}");
         }
     }
 
     #[test]
     fn ceil_div_rounds_up() {
-        assert_eq!(ceil_div(0, 4), 0);
-        assert_eq!(ceil_div(1, 4), 1);
-        assert_eq!(ceil_div(4, 4), 1);
-        assert_eq!(ceil_div(5, 4), 2);
+        // Given
+        let numerators = [0, 1, 4, 5];
+
+        // When
+        let got = numerators.map(|a| ceil_div(a, 4));
+
+        // Then
+        assert_eq!(got, [0, 1, 1, 2]);
     }
 }

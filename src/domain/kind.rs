@@ -35,6 +35,7 @@ mod tests {
 
     #[test]
     fn kind_for_matches_expected_names() {
+        // Given
         let cases: &[(&str, Option<Kind>)] = &[
             ("AGENTS.md", Some(Kind::Agents)),
             ("agents.md", Some(Kind::Agents)),
@@ -48,7 +49,11 @@ mod tests {
             ("AGENTS.md.bak", None),
         ];
         for (path, want) in cases {
-            assert_eq!(kind_for(Path::new(path)), *want, "{path}");
+            // When
+            let got = kind_for(Path::new(path));
+
+            // Then
+            assert_eq!(got, *want, "{path}");
         }
     }
 }

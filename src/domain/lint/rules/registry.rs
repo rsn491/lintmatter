@@ -40,9 +40,15 @@ mod tests {
 
     #[test]
     fn ids_are_unique_and_well_formed() {
+        // Given
         let mut seen = HashSet::new();
-        for rule in all() {
-            let id = rule.id();
+        let rules = all();
+
+        // When
+        let ids: Vec<&str> = rules.iter().map(|rule| rule.id()).collect();
+
+        // Then
+        for id in ids {
             assert!(!id.is_empty(), "a rule has an empty id");
             assert!(seen.insert(id), "duplicate rule id {id:?}");
             assert!(
@@ -56,12 +62,24 @@ mod tests {
     #[test]
     fn every_rule_applies_to_at_least_one_kind() {
         use crate::domain::Kind;
-        for rule in all() {
-            assert!(
-                rule.applies_to(Kind::Skill) || rule.applies_to(Kind::Agents),
-                "rule {:?} applies to nothing",
-                rule.id()
-            );
+
+        // Given
+        let rules = all();
+
+        // When
+        let applies: Vec<(&str, bool)> = rules
+            .iter()
+            .map(|rule| {
+                (
+                    rule.id(),
+                    rule.applies_to(Kind::Skill) || rule.applies_to(Kind::Agents),
+                )
+            })
+            .collect();
+
+        // Then
+        for (id, applies) in applies {
+            assert!(applies, "rule {id:?} applies to nothing");
         }
     }
 }
