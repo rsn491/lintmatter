@@ -125,7 +125,7 @@ mod tests {
     struct Nothing;
 
     impl PathProbe for Nothing {
-        fn exists(&self, _: &Path) -> bool {
+        fn exists(&self, _: &Path, _: &Path) -> bool {
             false
         }
     }

@@ -78,7 +78,7 @@ impl Counter for Fixed {
 pub(crate) struct Disk;
 
 impl PathProbe for Disk {
-    fn exists(&self, path: &Path) -> bool {
+    fn exists(&self, _: &Path, path: &Path) -> bool {
         fs::metadata(path).is_ok()
     }
 }
