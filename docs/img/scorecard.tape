@@ -1,7 +1,7 @@
 Output "docs/img/scorecard.gif"
 Set Shell "zsh"
 Set FontFamily "Menlo"
-Set FontSize 23
+Set FontSize 17
 Set Width 1600
 Set Height 760
 Set Padding 30

@@ -16,8 +16,11 @@ const BOLD: &str = "\x1b[1m";
 const DIM: &str = "\x1b[2m";
 const RESET: &str = "\x1b[0m";
 
-const ERROR_EMOJI: &str = "\u{274c}"; // ❌
-const WARNING_EMOJI: &str = "\u{26a0}\u{fe0f}"; // ⚠️
+// Single-column symbols rather than emoji: terminals disagree on whether an
+// emoji (and `⚠️`'s variation selector) takes one column or two, which
+// misaligned the card and ate the space after the symbol.
+const ERROR_SYMBOL: &str = "\u{2716}"; // ✖
+const WARNING_SYMBOL: &str = "\u{25b2}"; // ▲
 
 /// The color a score bands into: green is healthy, yellow wants a look,
 /// orange is a real problem, red wants work.
@@ -68,12 +71,10 @@ fn paint(color: bool, code: &str, s: &str) -> String {
     }
 }
 
-/// Terminal columns `s` occupies once printed: SGR color codes take none,
-/// emoji take two, and a variation selector (the invisible marker on
-/// `WARNING_EMOJI` that picks its emoji-style glyph) takes none.
-/// `chars().count()` would size the scorecard border wrong wherever one lands;
-/// this covers the handful of symbols this reporter prints without a full
-/// Unicode width table.
+/// Terminal columns `s` occupies once printed: SGR color codes take none and
+/// emoji take two. `chars().count()` would size the scorecard border wrong
+/// wherever one lands; this covers the symbols this reporter prints without a
+/// full Unicode width table.
 fn visible_width(s: &str) -> usize {
     let mut width = 0;
     let mut chars = s.chars();
@@ -84,8 +85,7 @@ fn visible_width(s: &str) -> usize {
                 chars.by_ref().find(|&e| e == 'm');
                 0
             }
-            0xfe00..=0xfe0f => 0,
-            0x2600..=0x26ff | 0x2700..=0x27bf | 0x1f300..=0x1faff if c != '\u{2714}' => 2,
+            0x1f300..=0x1faff => 2,
             _ => 1,
         };
     }
@@ -150,15 +150,16 @@ impl Report for TextReporter {
                     } else {
                         "\u{b7}".to_string()
                     };
-                    let (emoji, code) = match f.severity {
-                        Severity::Error => (ERROR_EMOJI, RED),
-                        Severity::Warning => (WARNING_EMOJI, YELLOW),
+                    let (symbol, code) = match f.severity {
+                        Severity::Error => (ERROR_SYMBOL, RED),
+                        Severity::Warning => (WARNING_SYMBOL, YELLOW),
                     };
                     writeln!(
                         w,
-                        "  {} {} {emoji} {}  {}",
+                        "  {} {} {} {}  {}",
                         paint(color, DIM, &format!("{line:>gutter$}")),
                         paint(color, DIM, "\u{2502}"),
+                        paint(color, code, symbol),
                         paint(color, code, &f.message),
                         paint(color, DIM, f.rule),
                     )
@@ -227,13 +228,15 @@ fn write_scorecard(
         )),
         (s.files_with_errors > 0).then(|| {
             format!(
-                "{ERROR_EMOJI} {}",
+                "{} {}",
+                paint(color, RED, ERROR_SYMBOL),
                 paint(color, RED, &format!("{} with errors", s.files_with_errors))
             )
         }),
         (s.files_with_warnings > 0).then(|| {
             format!(
-                "{WARNING_EMOJI} {}",
+                "{} {}",
+                paint(color, YELLOW, WARNING_SYMBOL),
                 paint(
                     color,
                     YELLOW,
@@ -255,7 +258,9 @@ fn write_scorecard(
         .max(visible_width(&counts))
         .max(TITLE.len())
         + 4;
-    let edge = |s: &str| paint(color, DIM, s);
+    // Tinted by the run's band rather than dimmed: a dim border all but
+    // vanishes on many themes.
+    let edge = |text: &str| paint(color, score_color(s.score), text);
     let row = |content: &str| {
         let pad = " ".repeat(inner - 4 - visible_width(content));
         format!("{}  {content}{pad}  {}", edge("\u{2502}"), edge("\u{2502}"))
@@ -464,8 +469,8 @@ mod tests {
 
         // Then
         let out = String::from_utf8(buf).unwrap();
-        assert!(out.contains(ERROR_EMOJI), "{out}");
-        assert!(out.contains(WARNING_EMOJI), "{out}");
+        assert!(out.contains(ERROR_SYMBOL), "{out}");
+        assert!(out.contains(WARNING_SYMBOL), "{out}");
         assert!(out.contains(RED), "{out}");
         assert!(out.contains(YELLOW), "{out}");
         assert!(out.contains(BOLD), "{out}");
