@@ -57,6 +57,39 @@ jobs:
 
       - uses: pre-commit/action@v3.0.1
 
+  msrv:
+    name: MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Read the floor from Cargo.toml so the job can't drift from `rust-version`.
+      - name: Read rust-version
+        id: msrv
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "lintmatter") | .rust_version')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build and test on the MSRV
+        run: |
+          cargo check --workspace --all-targets --locked
+          cargo test --workspace --locked
+
+      # Fails when `rust-version` is lower than what the code needs.
+      - uses: taiki-e/install-action@cargo-msrv
+
+      - name: Verify rust-version is the true minimum
+        run: cargo msrv verify
+
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
