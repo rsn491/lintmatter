@@ -25,7 +25,8 @@ use crate::domain::lint::{self, Linter};
 pub const EXIT_OK: i32 = 0;
 /// At least one error-severity finding was reported.
 pub const EXIT_FINDINGS: i32 = 1;
-/// The run could not happen: bad flags or unreadable files.
+/// The run could not happen: bad flags, a bad config, or a path that cannot be searched.
+/// (A file that turns unreadable mid-run is reported and exits `EXIT_FINDINGS`.)
 pub const EXIT_USAGE: i32 = 2;
 
 const LONG_ABOUT: &str = "\
@@ -174,6 +175,8 @@ struct Cli {
     format: Format,
     color: ColorChoice,
     quiet: bool,
+    /// Resolved once, so config discovery and the linter agree on it.
+    cwd: PathBuf,
 }
 
 impl Cli {
@@ -194,6 +197,7 @@ impl Cli {
             format: f.format,
             color: f.color,
             quiet: f.quiet,
+            cwd: cwd.to_path_buf(),
         })
     }
 
@@ -209,8 +213,11 @@ impl Cli {
     }
 
     fn execute(self, stdout: &mut impl Write, stderr: &mut impl Write, is_terminal: bool) -> i32 {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let linter = Linter::new(self.settings.config.clone(), cwd, Box::new(LocalFs));
+        let linter = Linter::new(
+            self.settings.config.clone(),
+            self.cwd.clone(),
+            Box::new(LocalFs),
+        );
         let run = LintRun::new(FsDiscoverer, LocalFs, linter);
         let outcome: Outcome = match run.execute(&self.settings.paths, &self.settings.excludes) {
             Ok(o) => o,
