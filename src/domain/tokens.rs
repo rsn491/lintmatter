@@ -101,6 +101,7 @@ mod tests {
 
     #[test]
     fn count_matches_reference_cases() {
+        // Given
         let cases: &[(&str, usize)] = &[
             ("", 0),
             ("hello", 2),
@@ -116,16 +117,26 @@ mod tests {
         ];
         let e = Estimator::new();
         for (input, want) in cases {
-            assert_eq!(e.count(input), *want, "count({input:?})");
+            // When
+            let got = e.count(input);
+
+            // Then
+            assert_eq!(got, *want, "count({input:?})");
         }
     }
 
     #[test]
     fn prose_ratio_is_reasonable() {
+        // Given
         let prose = "The linter reads every instruction file in the repository and \
             reports the ones that have grown past their token budget, so a reviewer \
             can see the cost of the change before it lands on the default branch.";
-        let got = Estimator::new().count(prose);
+        let e = Estimator::new();
+
+        // When
+        let got = e.count(prose);
+
+        // Then
         let ratio = prose.len() as f64 / got as f64;
         assert!(
             (3.2..=5.0).contains(&ratio),
@@ -136,14 +147,21 @@ mod tests {
 
     #[test]
     fn count_is_monotonic() {
+        // Given
         let e = Estimator::new();
-        let mut prev = 0;
         let mut text = String::new();
+
+        // When
+        let mut counts = Vec::new();
         for _ in 0..50 {
             text.push_str("another sentence of filler prose. ");
-            let got = e.count(&text);
+            counts.push(e.count(&text));
+        }
+
+        // Then
+        for pair in counts.windows(2) {
+            let (prev, got) = (pair[0], pair[1]);
             assert!(got >= prev, "count dropped from {prev} to {got}");
-            prev = got;
         }
     }
 }

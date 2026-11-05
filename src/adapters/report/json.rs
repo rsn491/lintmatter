@@ -162,7 +162,13 @@ mod tests {
 
     #[test]
     fn json_output_shape() {
-        let buf = render_json(&results(), false);
+        // Given
+        let input = results();
+
+        // When
+        let buf = render_json(&input, false);
+
+        // Then
         let got: serde_json::Value = serde_json::from_slice(&buf).unwrap();
         assert_eq!(got["version"], SCHEMA_VERSION);
         assert_eq!(got["files"].as_array().unwrap().len(), 2);
@@ -178,7 +184,13 @@ mod tests {
 
     #[test]
     fn json_quiet_suppresses_warnings() {
-        let buf = render_json(&results(), true);
+        // Given
+        let input = results();
+
+        // When
+        let buf = render_json(&input, true);
+
+        // Then
         let got: serde_json::Value = serde_json::from_slice(&buf).unwrap();
         for file in got["files"].as_array().unwrap() {
             for finding in file["findings"].as_array().unwrap() {
@@ -190,9 +202,13 @@ mod tests {
 
     #[test]
     fn json_quiet_does_not_mutate_input() {
+        // Given
         let input = results();
+
+        // When
         let buf = render_json(&input, true);
 
+        // Then
         // The rendered report drops the warning, but the caller's results are
         // left intact -- quiet is a view, not an edit.
         let got: serde_json::Value = serde_json::from_slice(&buf).unwrap();

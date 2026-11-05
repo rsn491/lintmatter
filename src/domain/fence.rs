@@ -59,30 +59,40 @@ mod tests {
 
     #[test]
     fn tracks_matching_fence_close() {
+        // Given
         let mut t = FenceTracker::default();
-        assert!(!t.scan_line("```"));
-        assert!(!t.scan_line("inside"));
-        assert!(!t.scan_line("```"));
-        assert!(t.scan_line("outside"));
+        let lines = ["```", "inside", "```", "outside"];
+
+        // When
+        let scanned = lines.map(|l| t.scan_line(l));
+
+        // Then
+        assert_eq!(scanned, [false, false, false, true]);
     }
 
     #[test]
     fn shorter_or_differing_marker_does_not_close() {
+        // Given
         let mut t = FenceTracker::default();
-        assert!(!t.scan_line("````"));
-        assert!(!t.scan_line("```"));
-        assert!(!t.scan_line("~~~"));
-        assert!(!t.scan_line("````"));
-        assert!(t.scan_line("outside"));
+        let lines = ["````", "```", "~~~", "````", "outside"];
+
+        // When
+        let scanned = lines.map(|l| t.scan_line(l));
+
+        // Then
+        assert_eq!(scanned, [false, false, false, false, true]);
     }
 
     #[test]
     fn info_string_does_not_close() {
+        // Given
         let mut t = FenceTracker::default();
-        assert!(!t.scan_line("```"));
-        assert!(!t.scan_line("```rust"));
-        assert!(!t.scan_line("inside"));
-        assert!(!t.scan_line("```"));
-        assert!(t.scan_line("outside"));
+        let lines = ["```", "```rust", "inside", "```", "outside"];
+
+        // When
+        let scanned = lines.map(|l| t.scan_line(l));
+
+        // Then
+        assert_eq!(scanned, [false, false, false, false, true]);
     }
 }

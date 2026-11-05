@@ -384,9 +384,14 @@ mod tests {
 
     #[test]
     fn split_valid() {
+        // Given
         let src =
             "---\nname: my-skill\ndescription: Does a thing.\n---\n\n# Heading\n\nBody text.\n";
+
+        // When
         let d = Document::parse(src.as_bytes());
+
+        // Then
         let (fm, body, err) = (d.frontmatter, d.body, d.error);
         assert!(err.is_none());
         assert!(fm.present);
@@ -401,8 +406,13 @@ mod tests {
 
     #[test]
     fn split_no_frontmatter() {
+        // Given
         let src = "# Just markdown\n\nNo front matter here.\n";
+
+        // When
         let d = Document::parse(src.as_bytes());
+
+        // Then
         let (fm, body, err) = (d.frontmatter, d.body, d.error);
         assert!(err.is_none());
         assert!(!fm.present);
@@ -411,8 +421,13 @@ mod tests {
 
     #[test]
     fn split_bom() {
+        // Given
         let src = "\u{feff}---\nname: bom-skill\n---\nbody\n";
+
+        // When
         let d = Document::parse(src.as_bytes());
+
+        // Then
         let (fm, _, err) = (d.frontmatter, d.body, d.error);
         assert!(err.is_none());
         assert_eq!(fm.string("name").as_deref(), Some("bom-skill"));
@@ -420,8 +435,13 @@ mod tests {
 
     #[test]
     fn split_crlf() {
+        // Given
         let src = "---\r\nname: crlf-skill\r\n---\r\nbody\r\n";
+
+        // When
         let d = Document::parse(src.as_bytes());
+
+        // Then
         let (fm, _, err) = (d.frontmatter, d.body, d.error);
         assert!(err.is_none());
         assert_eq!(fm.string("name").as_deref(), Some("crlf-skill"));
@@ -429,6 +449,7 @@ mod tests {
 
     #[test]
     fn split_errors() {
+        // Given
         let cases: &[(&str, &str, ErrKind, usize)] = &[
             (
                 "fence not first",
@@ -457,7 +478,10 @@ mod tests {
             ("empty block", "---\n---\nbody\n", ErrKind::NotMapping, 1),
         ];
         for (name, src, want_kind, want_line) in cases {
+            // When
             let d = Document::parse(src.as_bytes());
+
+            // Then
             let (_, body, err) = (d.frontmatter, d.body, d.error);
             let err = err.unwrap_or_else(|| panic!("{name}: want an error"));
             assert_eq!(err.kind, *want_kind, "{name}: kind");
@@ -472,6 +496,7 @@ mod tests {
 
     #[test]
     fn misplaced_frontmatter_is_distinguished_from_a_thematic_break() {
+        // Given
         let cases: &[(&str, &str)] = &[
             (
                 "after a heading",
@@ -482,20 +507,7 @@ mod tests {
                 "Some intro.\n\n---\ndescription: Does a thing.\n---\nBody.\n",
             ),
         ];
-        for (name, src) in cases {
-            let d = Document::parse(src.as_bytes());
-            let err = d.error.unwrap_or_else(|| panic!("{name}: want an error"));
-            assert_eq!(err.kind, ErrKind::NotFirst, "{name}");
-            assert_eq!(err.line, 3, "{name}");
-        }
-
-        let d = Document::parse(
-            b"# Title\n\n---\n\nA break with no partner.\n\n---\nname: late-skill\ndescription: Real front matter, in the wrong place.\n---\n",
-        );
-        let err = d.error.expect("want an error after an unclosed candidate");
-        assert_eq!(err.kind, ErrKind::NotFirst);
-        assert_eq!(err.line, 7);
-
+        let unclosed_candidate: &[u8] = b"# Title\n\n---\n\nA break with no partner.\n\n---\nname: late-skill\ndescription: Real front matter, in the wrong place.\n---\n";
         let quiet: &[(&str, &str)] = &[
             ("thematic break", "# Title\n\n---\n\nA new section.\n"),
             (
@@ -519,8 +531,32 @@ mod tests {
                 "# Title\n\n---\n\nSection.\n\n---\n\nAnother.\n",
             ),
         ];
-        for (name, src) in quiet {
-            let d = Document::parse(src.as_bytes());
+
+        // When
+        let misplaced: Vec<Document> = cases
+            .iter()
+            .map(|(_, src)| Document::parse(src.as_bytes()))
+            .collect();
+        let unclosed = Document::parse(unclosed_candidate);
+        let quiet_docs: Vec<Document> = quiet
+            .iter()
+            .map(|(_, src)| Document::parse(src.as_bytes()))
+            .collect();
+
+        // Then
+        for ((name, _), d) in cases.iter().zip(misplaced) {
+            let err = d.error.unwrap_or_else(|| panic!("{name}: want an error"));
+            assert_eq!(err.kind, ErrKind::NotFirst, "{name}");
+            assert_eq!(err.line, 3, "{name}");
+        }
+
+        let err = unclosed
+            .error
+            .expect("want an error after an unclosed candidate");
+        assert_eq!(err.kind, ErrKind::NotFirst);
+        assert_eq!(err.line, 7);
+
+        for ((name, _), d) in quiet.iter().zip(quiet_docs) {
             assert!(
                 d.error.is_none(),
                 "{name}: unexpected {:?}",
@@ -532,7 +568,13 @@ mod tests {
 
     #[test]
     fn unterminated_frontmatter_excludes_the_opening_fence() {
-        let d = Document::parse(b"---\nname: open-ended\nbody without a closing fence\n");
+        // Given
+        let src = b"---\nname: open-ended\nbody without a closing fence\n";
+
+        // When
+        let d = Document::parse(src);
+
+        // Then
         assert_eq!(d.error.map(|e| e.kind), Some(ErrKind::Unterminated));
         assert!(!d.body.starts_with("---"), "body = {:?}", d.body);
         assert!(
@@ -540,12 +582,12 @@ mod tests {
             "body = {:?}",
             d.body
         );
-
         assert!(d.body.contains("body without a closing fence"));
     }
 
     #[test]
     fn string_slice_variants() {
+        // Given
         let cases: &[(&str, &str, Option<&[&str]>)] = &[
             (
                 "sequence",
@@ -577,7 +619,11 @@ mod tests {
             let d = Document::parse(src.as_bytes());
             let (fm, _, err) = (d.frontmatter, d.body, d.error);
             assert!(err.is_none(), "{name}: {:?}", err.map(|e| e.msg));
+
+            // When
             let got = fm.string_slice("allowed-tools");
+
+            // Then
             match want {
                 Some(want) => {
                     let got = got.unwrap_or_else(|| panic!("{name}: want Some, got None"));
@@ -590,20 +636,35 @@ mod tests {
 
     #[test]
     fn accessors_on_absent_keys() {
+        // Given
         let d = Document::parse(b"---\nname: only-name\n---\n");
         let (fm, _, err) = (d.frontmatter, d.body, d.error);
+
+        // When
+        let has = fm.has("license");
+        let node = fm.node("license");
+        let string = fm.string("license");
+        let line = fm.line("license");
+
+        // Then
         assert!(err.is_none());
-        assert!(!fm.has("license"));
-        assert!(fm.node("license").is_none());
-        assert!(fm.string("license").is_none());
-        assert_eq!(fm.line("license"), fm.end_line);
+        assert!(!has);
+        assert!(node.is_none());
+        assert!(string.is_none());
+        assert_eq!(line, fm.end_line);
     }
 
     #[test]
     fn node_kind() {
+        // Given
         let d = Document::parse(b"---\nmetadata:\n  owner: infra\n---\n");
         let (fm, _, err) = (d.frontmatter, d.body, d.error);
+
+        // When
+        let node = fm.node("metadata");
+
+        // Then
         assert!(err.is_none());
-        assert!(matches!(fm.node("metadata"), Some(Value::Mapping)));
+        assert!(matches!(node, Some(Value::Mapping)));
     }
 }

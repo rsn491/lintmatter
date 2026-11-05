@@ -219,7 +219,13 @@ mod tests {
 
     #[test]
     fn text_output_shape() {
-        let buf = render_text(&results(), false, false);
+        // Given
+        let input = results();
+
+        // When
+        let buf = render_text(&input, false, false);
+
+        // Then
         let out = String::from_utf8(buf).unwrap();
         let lines: Vec<&str> = out.trim_end_matches('\n').split('\n').collect();
         assert_eq!(lines.len(), 11, "{out}");
@@ -264,6 +270,7 @@ mod tests {
     /// flag -- in both the normal and `--quiet` views.
     #[test]
     fn text_drops_files_with_a_perfect_score() {
+        // Given
         let clean = vec![FileResult {
             path: "skills/good/SKILL.md".to_string(),
             kind: Kind::Skill,
@@ -271,17 +278,26 @@ mod tests {
             score: 100,
             findings: vec![],
         }];
-        let out = String::from_utf8(render_text(&clean, false, false)).unwrap();
-        assert!(!out.contains("skills/good/SKILL.md"), "{out}");
-        assert!(out.contains("Score: 100/100 · Healthy"), "{out}");
 
-        let out = String::from_utf8(render_text(&clean, true, false)).unwrap();
-        assert!(!out.contains("skills/good/SKILL.md"), "{out}");
+        // When
+        let normal = String::from_utf8(render_text(&clean, false, false)).unwrap();
+        let quiet = String::from_utf8(render_text(&clean, true, false)).unwrap();
+
+        // Then
+        assert!(!normal.contains("skills/good/SKILL.md"), "{normal}");
+        assert!(normal.contains("Score: 100/100 · Healthy"), "{normal}");
+        assert!(!quiet.contains("skills/good/SKILL.md"), "{quiet}");
     }
 
     #[test]
     fn text_quiet_suppresses_warnings() {
-        let buf = render_text(&results(), true, false);
+        // Given
+        let input = results();
+
+        // When
+        let buf = render_text(&input, true, false);
+
+        // Then
         let out = String::from_utf8(buf).unwrap();
         assert!(!out.contains("warning: "));
         assert!(out.contains("1 file with warnings"));
@@ -289,7 +305,13 @@ mod tests {
 
     #[test]
     fn text_singular_plural() {
-        let buf = render_text(&[], false, false);
+        // Given
+        let input: Vec<FileResult> = vec![];
+
+        // When
+        let buf = render_text(&input, false, false);
+
+        // Then
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains("Score: 100/100 · Healthy"), "{out}");
         assert!(
@@ -300,7 +322,13 @@ mod tests {
 
     #[test]
     fn text_color_adds_symbols_and_sgr_codes() {
-        let buf = render_text(&results(), false, true);
+        // Given
+        let input = results();
+
+        // When
+        let buf = render_text(&input, false, true);
+
+        // Then
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains(ERROR_EMOJI), "{out}");
         assert!(out.contains(WARNING_EMOJI), "{out}");
@@ -314,7 +342,13 @@ mod tests {
 
     #[test]
     fn text_color_clean_run_shows_green_count() {
-        let buf = render_text(&[], false, true);
+        // Given
+        let input: Vec<FileResult> = vec![];
+
+        // When
+        let buf = render_text(&input, false, true);
+
+        // Then
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains(GREEN), "{out}");
         assert!(!out.contains(RED), "{out}");
@@ -325,6 +359,13 @@ mod tests {
     /// worst band: it's painted orange rather than red.
     #[test]
     fn paint_score_orange_band() {
-        assert_eq!(paint_score(true, 60), format!("{ORANGE}60{RESET}"));
+        // Given
+        let score = 60;
+
+        // When
+        let painted = paint_score(true, score);
+
+        // Then
+        assert_eq!(painted, format!("{ORANGE}60{RESET}"));
     }
 }

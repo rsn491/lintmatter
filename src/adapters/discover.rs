@@ -223,6 +223,7 @@ mod tests {
 
     #[test]
     fn find_walks_recursively() {
+        // Given
         let dir = tree(&[
             ("AGENTS.md", "root instructions"),
             ("README.md", "not an instruction file"),
@@ -236,18 +237,23 @@ mod tests {
             ("dist/AGENTS.md", "build output"),
             ("skills/alpha/reference/doc.md", "supporting doc"),
         ]);
-        let targets = find(&[dir.path().to_string_lossy().to_string()], &[]).unwrap();
         let want = vec![
             "AGENTS.md (agents)".to_string(),
             "docs/AGENTS.md (agents)".to_string(),
             "skills/alpha/SKILL.md (skill)".to_string(),
             "skills/beta/skill.md (skill)".to_string(),
         ];
+
+        // When
+        let targets = find(&[dir.path().to_string_lossy().to_string()], &[]).unwrap();
+
+        // Then
         assert_eq!(rel_paths(dir.path(), &targets), want);
     }
 
     #[test]
     fn find_excludes() {
+        // Given
         let dir = tree(&[
             ("AGENTS.md", "root"),
             ("examples/AGENTS.md", "example"),
@@ -295,8 +301,12 @@ mod tests {
         ];
         for (excludes, want) in cases {
             let excludes: Vec<String> = excludes.iter().map(|s| s.to_string()).collect();
-            let targets = find(std::slice::from_ref(&root), &excludes).unwrap();
             let want: Vec<String> = want.iter().map(|s| s.to_string()).collect();
+
+            // When
+            let targets = find(std::slice::from_ref(&root), &excludes).unwrap();
+
+            // Then
             assert_eq!(
                 rel_paths(dir.path(), &targets),
                 want,
@@ -307,20 +317,24 @@ mod tests {
 
     #[test]
     fn find_explicit_file() {
+        // Given
         let dir = tree(&[
             ("nested/deep/SKILL.md", "a skill somewhere"),
             ("README.md", "not an instruction file"),
         ]);
         let file = dir.path().join("nested/deep/SKILL.md");
+        let skipped = tree(&[("node_modules/pkg/SKILL.md", "dependency skill")]);
+        let skipped_file = skipped.path().join("node_modules/pkg/SKILL.md");
+
+        // When
         let targets = find(&[file.to_string_lossy().to_string()], &[]).unwrap();
+        let skipped_targets = find(&[skipped_file.to_string_lossy().to_string()], &[]).unwrap();
+
+        // Then
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].kind, Kind::Skill);
-
-        let skipped = tree(&[("node_modules/pkg/SKILL.md", "dependency skill")]);
-        let file = skipped.path().join("node_modules/pkg/SKILL.md");
-        let targets = find(&[file.to_string_lossy().to_string()], &[]).unwrap();
         assert_eq!(
-            targets.len(),
+            skipped_targets.len(),
             1,
             "an explicit file inside a skipped directory is still linted"
         );
@@ -328,66 +342,75 @@ mod tests {
 
     #[test]
     fn find_errors() {
+        // Given
         let dir = tree(&[("README.md", "not an instruction file")]);
+        let not_instructions = dir.path().join("README.md").to_string_lossy().to_string();
+        let missing = dir.path().join("nope").to_string_lossy().to_string();
+        let root = dir.path().to_string_lossy().to_string();
 
-        let err = find(
-            &[dir.path().join("README.md").to_string_lossy().to_string()],
-            &[],
-        )
-        .unwrap_err()
-        .to_string();
-        assert!(err.contains("not an AGENTS.md or SKILL.md"), "{err}");
+        // When
+        let not_instructions_err = find(&[not_instructions], &[]).unwrap_err().to_string();
+        let missing_result = find(&[missing], &[]);
+        let bad_exclude_err = find(&[root], &["[".to_string()]).unwrap_err().to_string();
 
+        // Then
         assert!(
-            find(
-                &[dir.path().join("nope").to_string_lossy().to_string()],
-                &[]
-            )
-            .is_err()
+            not_instructions_err.contains("not an AGENTS.md or SKILL.md"),
+            "{not_instructions_err}"
         );
-
-        let err = find(
-            &[dir.path().to_string_lossy().to_string()],
-            &["[".to_string()],
-        )
-        .unwrap_err()
-        .to_string();
-        assert!(err.contains("invalid exclude"), "{err}");
+        assert!(missing_result.is_err());
+        assert!(
+            bad_exclude_err.contains("invalid exclude"),
+            "{bad_exclude_err}"
+        );
     }
 
     #[test]
     fn find_stops_at_the_depth_limit() {
+        // Given
         let dir = tempfile::tempdir().unwrap();
         let deep: PathBuf = (0..MAX_DEPTH + 5).map(|i| format!("d{i}")).collect();
         fs::create_dir_all(dir.path().join(&deep)).unwrap();
         fs::write(dir.path().join(&deep).join("AGENTS.md"), "too deep").unwrap();
-
-        let err = find(&[dir.path().to_string_lossy().to_string()], &[])
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("directories deep"), "{err}");
-
         let ok_dir = tempfile::tempdir().unwrap();
         let shallow: PathBuf = (0..MAX_DEPTH - 1).map(|i| format!("d{i}")).collect();
         fs::create_dir_all(ok_dir.path().join(&shallow)).unwrap();
         fs::write(ok_dir.path().join(&shallow).join("AGENTS.md"), "deep").unwrap();
+
+        // When
+        let err = find(&[dir.path().to_string_lossy().to_string()], &[])
+            .unwrap_err()
+            .to_string();
         let targets = find(&[ok_dir.path().to_string_lossy().to_string()], &[]).unwrap();
+
+        // Then
+        assert!(err.contains("directories deep"), "{err}");
         assert_eq!(targets.len(), 1);
     }
 
     #[test]
     fn find_deduplicates() {
+        // Given
         let dir = tree(&[("AGENTS.md", "root")]);
         let root = dir.path().to_string_lossy().to_string();
         let file = dir.path().join("AGENTS.md").to_string_lossy().to_string();
+
+        // When
         let targets = find(&[root, file.clone(), file], &[]).unwrap();
+
+        // Then
         assert_eq!(targets.len(), 1);
     }
 
     #[test]
     fn find_empty_result() {
+        // Given
         let dir = tree(&[("README.md", "nothing to lint here")]);
+
+        // When
         let targets = find(&[dir.path().to_string_lossy().to_string()], &[]).unwrap();
+
+        // Then
         assert!(targets.is_empty());
     }
 }

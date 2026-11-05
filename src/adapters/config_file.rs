@@ -253,6 +253,7 @@ mod tests {
 
     #[test]
     fn parses_every_setting() {
+        // Given
         let src = r#"
 max-agents-tokens: 1200
 max-skill-tokens: 0
@@ -266,7 +267,11 @@ rules:
   frontmatter.unknown-key: off
   tokens.content: true
 "#;
+
+        // When
         let got = parse_str(src).unwrap();
+
+        // Then
         assert_eq!(
             got,
             Settings {
@@ -286,20 +291,33 @@ rules:
 
     #[test]
     fn empty_documents_yield_no_settings() {
-        for src in ["", "\n\n", "# just a comment\n", "---\n"] {
+        // Given
+        let sources = ["", "\n\n", "# just a comment\n", "---\n"];
+
+        for src in sources {
+            // When
             let got = parse_str(src).unwrap_or_else(|e| panic!("{src:?}: {e}"));
+
+            // Then
             assert_eq!(got, Settings::default(), "{src:?}");
         }
     }
 
     #[test]
     fn scalar_shorthand_accepts_a_lone_exclude() {
-        let got = parse_str("exclude: testdata\n").unwrap();
+        // Given
+        let src = "exclude: testdata\n";
+
+        // When
+        let got = parse_str(src).unwrap();
+
+        // Then
         assert_eq!(got.excludes, vec!["testdata".to_string()]);
     }
 
     #[test]
     fn errors_point_at_the_offending_line() {
+        // Given
         let cases: &[(&str, &str, &str)] = &[
             (
                 "unknown setting",
@@ -358,7 +376,10 @@ rules:
             ),
         ];
         for (name, src, want) in cases {
+            // When
             let err = parse_str(src).unwrap_err();
+
+            // Then
             assert!(err.contains(want), "{name}: got {err:?}, want {want:?}");
             assert!(!err.contains('\n'), "{name}: message should be one line");
         }
@@ -366,48 +387,80 @@ rules:
 
     #[test]
     fn load_reads_a_file() {
+        // Given
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join(".lintmatter.yaml");
         fs::write(&path, "max-skill-tokens: 42\n").unwrap();
+        let bad_dir = tempfile::tempdir().unwrap();
+        let bad_path = bad_dir.path().join(".lintmatter.yaml");
+        fs::write(&bad_path, "max-skill-tokens: nope\n").unwrap();
 
+        // When
         let got = load(&path).unwrap();
+        let missing_err = load(&dir.path().join("nope.yaml")).unwrap_err().to_string();
+        let invalid_err = load(&bad_path).unwrap_err().to_string();
+
+        // Then
         assert_eq!(got.max_skill_tokens, Some(42));
-
-        let err = load(&dir.path().join("nope.yaml")).unwrap_err().to_string();
-        assert!(err.contains("cannot read config"), "{err}");
-
+        assert!(missing_err.contains("cannot read config"), "{missing_err}");
         // Errors name the file they came from.
-        fs::write(&path, "max-skill-tokens: nope\n").unwrap();
-        let err = load(&path).unwrap_err().to_string();
-        assert!(err.contains(".lintmatter.yaml:1:"), "{err}");
+        assert!(invalid_err.contains(".lintmatter.yaml:1:"), "{invalid_err}");
     }
 
     #[test]
     fn discover_walks_up_from_the_starting_directory() {
-        let dir = tempfile::tempdir().unwrap();
-        let nested = dir.path().join("skills/deep");
-        fs::create_dir_all(&nested).unwrap();
-        assert!(discover(&nested).is_none());
+        // Given
+        let empty = tempfile::tempdir().unwrap();
+        let empty_nested = empty.path().join("skills/deep");
+        fs::create_dir_all(&empty_nested).unwrap();
 
-        let root_cfg = dir.path().join(".lintmatter.yml");
+        let yml = tempfile::tempdir().unwrap();
+        let yml_nested = yml.path().join("skills/deep");
+        fs::create_dir_all(&yml_nested).unwrap();
+        let root_cfg = yml.path().join(".lintmatter.yml");
         fs::write(&root_cfg, "max-skill-tokens: 1\n").unwrap();
-        assert_eq!(discover(&nested), Some(root_cfg));
 
+        let both = tempfile::tempdir().unwrap();
+        fs::write(both.path().join(".lintmatter.yml"), "max-skill-tokens: 1\n").unwrap();
+        let preferred = both.path().join(".lintmatter.yaml");
+        fs::write(&preferred, "max-skill-tokens: 1\n").unwrap();
+
+        let ancestors = tempfile::tempdir().unwrap();
+        let ancestors_nested = ancestors.path().join("skills/deep");
+        fs::create_dir_all(&ancestors_nested).unwrap();
+        fs::write(
+            ancestors.path().join(".lintmatter.yaml"),
+            "max-skill-tokens: 1\n",
+        )
+        .unwrap();
+        let nested_cfg = ancestors_nested.join(".lintmatter.yaml");
+        fs::write(&nested_cfg, "max-skill-tokens: 2\n").unwrap();
+
+        // When
+        let none = discover(&empty_nested);
+        let from_ancestor = discover(&yml_nested);
+        let yaml_over_yml = discover(both.path());
+        let nearest = discover(&ancestors_nested);
+
+        // Then
+        assert!(none.is_none());
+        assert_eq!(from_ancestor, Some(root_cfg));
         // .yaml wins over .yml in the same directory, and the nearest
         // directory wins over an ancestor.
-        let preferred = dir.path().join(".lintmatter.yaml");
-        fs::write(&preferred, "max-skill-tokens: 1\n").unwrap();
-        assert_eq!(discover(dir.path()), Some(preferred));
-
-        let nested_cfg = nested.join(".lintmatter.yaml");
-        fs::write(&nested_cfg, "max-skill-tokens: 2\n").unwrap();
-        assert_eq!(discover(&nested), Some(nested_cfg));
+        assert_eq!(yaml_over_yml, Some(preferred));
+        assert_eq!(nearest, Some(nested_cfg));
     }
 
     #[test]
     fn discover_ignores_a_directory_named_like_the_config() {
+        // Given
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir(dir.path().join(".lintmatter.yaml")).unwrap();
-        assert!(discover(dir.path()).is_none());
+
+        // When
+        let found = discover(dir.path());
+
+        // Then
+        assert!(found.is_none());
     }
 }

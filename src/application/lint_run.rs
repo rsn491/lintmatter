@@ -144,7 +144,14 @@ mod tests {
 
     #[test]
     fn clean_files_pass() {
-        let out = run(vec!["/repo/ok/SKILL.md"], &[("/repo/ok/SKILL.md", VALID)]);
+        // Given
+        let found = vec!["/repo/ok/SKILL.md"];
+        let files = [("/repo/ok/SKILL.md", VALID)];
+
+        // When
+        let out = run(found, &files);
+
+        // Then
         assert_eq!(out.results.len(), 1);
         assert!(out.results[0].findings.is_empty());
         assert!(!out.failed());
@@ -152,10 +159,14 @@ mod tests {
 
     #[test]
     fn unreadable_files_are_skipped_but_fail_the_run() {
-        let out = run(
-            vec!["/repo/ok/SKILL.md", "/repo/gone/SKILL.md"],
-            &[("/repo/ok/SKILL.md", VALID)],
-        );
+        // Given
+        let found = vec!["/repo/ok/SKILL.md", "/repo/gone/SKILL.md"];
+        let files = [("/repo/ok/SKILL.md", VALID)];
+
+        // When
+        let out = run(found, &files);
+
+        // Then
         assert_eq!(out.results.len(), 1);
         assert_eq!(out.unreadable.len(), 1);
         assert!(

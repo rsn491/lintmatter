@@ -74,6 +74,7 @@ mod tests {
 
     #[test]
     fn frontmatter_score() {
+        // Given
         let valid_body = "description: Use this skill when you need a fixture that passes.";
         let cases: Vec<(&str, &str, String, u8)> = vec![
             (
@@ -112,7 +113,11 @@ mod tests {
 
         for (name, dir, src, want) in cases {
             let (_base, target) = write_skill(dir, &src);
+
+            // When
             let res = linter(generous_config()).file(&target).unwrap();
+
+            // Then
             assert_eq!(res.score, want, "{name}");
         }
     }
@@ -121,41 +126,50 @@ mod tests {
     /// --strict only moves severities, which the score does not read.
     #[test]
     fn score_follows_disable_but_not_strict() {
+        // Given
         let src = "---\nname: Bad_Name\ndescription: Use this skill for a fixture.\n---\nBody.\n";
         let (_base, target) = write_skill("Bad_Name", src);
+        let mut strict_cfg = generous_config();
+        strict_cfg.strict = true;
+        let mut disabled_cfg = generous_config();
+        disabled_cfg.disabled = vec![RULE_NAME_FORMAT.to_string()];
 
-        let res = linter(generous_config()).file(&target).unwrap();
-        assert_eq!(res.score, 87);
+        // When
+        let default_res = linter(generous_config()).file(&target).unwrap();
+        let strict_res = linter(strict_cfg).file(&target).unwrap();
+        let disabled_res = linter(disabled_cfg).file(&target).unwrap();
 
-        let mut cfg = generous_config();
-        cfg.strict = true;
-        let res = linter(cfg).file(&target).unwrap();
-        assert_eq!(res.score, 87);
-
-        let mut cfg = generous_config();
-        cfg.disabled = vec![RULE_NAME_FORMAT.to_string()];
-        let res = linter(cfg).file(&target).unwrap();
-        assert_eq!(res.score, 100);
+        // Then
+        assert_eq!(default_res.score, 87);
+        assert_eq!(strict_res.score, 87);
+        assert_eq!(disabled_res.score, 100);
     }
 
     /// Full marks up to the budget, then falling linearly to zero at twice it.
     #[test]
     fn token_score_grades_the_overage() {
+        // Given
         let base = tempfile::tempdir().unwrap();
         let target = agents_target(base.path(), "Body.\n");
         let mut cfg = generous_config();
         cfg.max_agents_tokens = 100;
 
-        for (count, want) in [
+        let cases = [
             (50, 100),
             (100, 100),
             (125, 75),
             (150, 50),
             (200, 0),
             (900, 0),
-        ] {
+        ];
+
+        for (count, want) in cases {
             let l = linter(cfg.clone()).with_counter(Box::new(Fixed(count)));
+
+            // When
             let res = l.file(&target).unwrap();
+
+            // Then
             assert_eq!(res.score, want, "{count} tokens against a 100 token budget");
         }
     }
@@ -164,62 +178,76 @@ mod tests {
     /// description weigh against the body rather than beside the other parts.
     #[test]
     fn token_score_averages_the_budgets_that_ran() {
+        // Given
         let (_base, target) = write_skill("valid-skill", VALID_SKILL);
-        let mut cfg = generous_config();
+        let mut body_only_cfg = generous_config();
         // Only the body is budgeted, and it sits at twice its limit.
-        cfg.max_skill_tokens = 1;
-        let res = linter(cfg.clone())
-            .with_counter(Box::new(Fixed(2)))
-            .file(&target)
-            .unwrap();
-        // Front matter is perfect, the one budget that ran scores zero.
-        assert_eq!(res.score, 50);
-
+        body_only_cfg.max_skill_tokens = 1;
         // Budget the name too and it passes, pulling the token part back to 50.
-        cfg.max_skill_name_tokens = 2;
-        let res = linter(cfg)
+        let mut with_name_cfg = body_only_cfg.clone();
+        with_name_cfg.max_skill_name_tokens = 2;
+
+        // When
+        let body_only = linter(body_only_cfg)
             .with_counter(Box::new(Fixed(2)))
             .file(&target)
             .unwrap();
-        assert_eq!(res.score, 75);
+        let with_name = linter(with_name_cfg)
+            .with_counter(Box::new(Fixed(2)))
+            .file(&target)
+            .unwrap();
+
+        // Then
+        // Front matter is perfect, the one budget that ran scores zero.
+        assert_eq!(body_only.score, 50);
+        assert_eq!(with_name.score, 75);
     }
 
     #[test]
     fn file_reference_score_is_all_or_nothing() {
-        let base = tempfile::tempdir().unwrap();
-        write_file(base.path(), "there.md", "Present.\n");
-        let target = agents_target(base.path(), "See [there](./there.md).\n");
-        let res = linter(generous_config()).file(&target).unwrap();
-        assert_eq!(res.score, 100);
-
-        let base = tempfile::tempdir().unwrap();
-        write_file(base.path(), "there.md", "Present.\n");
-        let target = agents_target(
-            base.path(),
+        // Given
+        let intact_base = tempfile::tempdir().unwrap();
+        write_file(intact_base.path(), "there.md", "Present.\n");
+        let intact_target = agents_target(intact_base.path(), "See [there](./there.md).\n");
+        let broken_base = tempfile::tempdir().unwrap();
+        write_file(broken_base.path(), "there.md", "Present.\n");
+        let broken_target = agents_target(
+            broken_base.path(),
             "See [there](./there.md) and [gone](./gone.md).\n",
         );
-        let res = linter(generous_config()).file(&target).unwrap();
-        assert_eq!(res.score, 0);
+
+        // When
+        let intact = linter(generous_config()).file(&intact_target).unwrap();
+        let broken = linter(generous_config()).file(&broken_target).unwrap();
+
+        // Then
+        assert_eq!(intact.score, 100);
+        assert_eq!(broken.score, 0);
     }
 
     /// An AGENTS.md has no front matter to rate, and with every budget off and
     /// nothing to resolve there is nothing left to hold against it.
     #[test]
     fn parts_with_nothing_to_judge_drop_out() {
-        let base = tempfile::tempdir().unwrap();
-        let target = agents_target(base.path(), "Body with no references.\n");
-        let res = linter(generous_config()).file(&target).unwrap();
-        assert_eq!(res.score, 100);
-
+        // Given
+        let plain_base = tempfile::tempdir().unwrap();
+        let plain_target = agents_target(plain_base.path(), "Body with no references.\n");
+        let broken_base = tempfile::tempdir().unwrap();
         // Give it a broken reference and a body twice its budget: the two parts
         // that now apply average, with front matter still left out.
-        let target = agents_target(base.path(), "See [gone](./gone.md).\n");
+        let broken_target = agents_target(broken_base.path(), "See [gone](./gone.md).\n");
         let mut cfg = generous_config();
         cfg.max_agents_tokens = 100;
-        let res = linter(cfg)
+
+        // When
+        let plain = linter(generous_config()).file(&plain_target).unwrap();
+        let broken = linter(cfg)
             .with_counter(Box::new(Fixed(200)))
-            .file(&target)
+            .file(&broken_target)
             .unwrap();
-        assert_eq!(res.score, 0);
+
+        // Then
+        assert_eq!(plain.score, 100);
+        assert_eq!(broken.score, 0);
     }
 }
