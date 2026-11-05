@@ -99,22 +99,20 @@ impl Discoverer {
 
     /// Adds every target under `paths`.
     fn collect(&mut self, paths: &[String]) -> Result<(), DiscoverError> {
-        for path in paths {
+        paths.iter().try_for_each(|path| {
             let path = Path::new(path);
             let meta = fs::metadata(path).map_err(read_err(path))?;
             if meta.is_dir() {
-                self.walk(path, path, 0)?;
-                continue;
+                return self.walk(path, path, 0);
             }
             // A file named outright has no walk root, so it stands as its own:
             // its directory is the tree we were pointed at.
             let root = path.parent().unwrap_or(Path::new("."));
-            match kind_for(path) {
-                Some(kind) => self.add(path, kind, root),
-                None => return Err(DiscoverError::NotInstructionFile(path.to_path_buf())),
-            }
-        }
-        Ok(())
+            let kind = kind_for(path)
+                .ok_or_else(|| DiscoverError::NotInstructionFile(path.to_path_buf()))?;
+            self.add(path, kind, root);
+            Ok(())
+        })
     }
 
     /// Returns the collected targets, sorted by path.
@@ -144,7 +142,7 @@ impl Discoverer {
             .map_err(read_err(dir))?;
         entries.sort_by_key(|e| e.file_name());
 
-        for entry in entries {
+        entries.into_iter().try_for_each(|entry| {
             let path = entry.path();
             let file_type = entry.file_type().map_err(read_err(&path))?;
             let name = entry.file_name();
@@ -153,20 +151,17 @@ impl Discoverer {
 
             if file_type.is_dir() {
                 if SKIP_DIRS.contains(&name.as_ref()) || self.excluded(&name, &rel) {
-                    continue;
+                    return Ok(());
                 }
-                self.walk(root, &path, depth + 1)?;
-                continue;
+                return self.walk(root, &path, depth + 1);
             }
-            let Some(kind) = kind_for(&path) else {
-                continue;
-            };
-            if self.excluded(&name, &rel) {
-                continue;
+            if let Some(kind) = kind_for(&path)
+                && !self.excluded(&name, &rel)
+            {
+                self.add(&path, kind, root);
             }
-            self.add(&path, kind, root);
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     /// Whether an entry matches any `--exclude` glob, by base name or by its

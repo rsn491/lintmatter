@@ -96,7 +96,7 @@ impl Report for TextReporter {
         summary: &Summary,
     ) -> io::Result<()> {
         let color = self.color;
-        for r in results {
+        results.iter().try_for_each(|r| {
             let owned;
             let findings: &[Finding] = if self.quiet {
                 owned = filter_errors(&r.findings);
@@ -104,11 +104,8 @@ impl Report for TextReporter {
             } else {
                 &r.findings
             };
-            if self.quiet && findings.is_empty() {
-                continue;
-            }
-            if r.score == 100 {
-                continue;
+            if (self.quiet && findings.is_empty()) || r.score == 100 {
+                return Ok(());
             }
             writeln!(
                 w,
@@ -116,7 +113,7 @@ impl Report for TextReporter {
                 paint(color, BOLD, &r.path),
                 paint_score(color, r.score)
             )?;
-            for f in findings {
+            findings.iter().try_for_each(|f| {
                 let location = if f.line > 0 {
                     format!("{}: ", f.line)
                 } else {
@@ -132,13 +129,13 @@ impl Report for TextReporter {
                         w,
                         "  {location}{emoji} {severity}: {}: {}",
                         f.rule, f.message
-                    )?;
+                    )
                 } else {
-                    writeln!(w, "  {location}{severity}: {}: {}", f.rule, f.message)?;
+                    writeln!(w, "  {location}{severity}: {}: {}", f.rule, f.message)
                 }
-            }
-            writeln!(w)?;
-        }
+            })?;
+            writeln!(w)
+        })?;
 
         write_scorecard(w, color, summary)
     }

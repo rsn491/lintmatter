@@ -112,10 +112,9 @@ impl Rule for UnknownKey {
     fn check(&self, ctx: &FileContext<'_>, sink: &mut FindingSink<'_>) {
         let Some(fm) = ctx.frontmatter() else { return };
         sink.applies();
-        for key in fm.keys() {
-            if !KNOWN_KEYS.contains(key.as_str()) {
-                sink.warn(fm.line(key), format!("unknown front-matter key {key:?}"));
-            }
-        }
+        fm.keys()
+            .iter()
+            .filter(|key| !KNOWN_KEYS.contains(key.as_str()))
+            .for_each(|key| sink.warn(fm.line(key), format!("unknown front-matter key {key:?}")));
     }
 }

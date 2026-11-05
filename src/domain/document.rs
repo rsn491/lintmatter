@@ -103,16 +103,13 @@ impl Frontmatter {
                     .map(str::to_string)
                     .collect(),
             ),
-            Value::Sequence(items) => {
-                let mut out = Vec::with_capacity(items.len());
-                for item in items {
-                    match item {
-                        Value::Scalar(s) => out.push(s.clone()),
-                        _ => return None,
-                    }
-                }
-                Some(out)
-            }
+            Value::Sequence(items) => items
+                .iter()
+                .map(|item| match item {
+                    Value::Scalar(s) => Some(s.clone()),
+                    _ => None,
+                })
+                .collect(),
             Value::Mapping | Value::Other => None,
         }
     }
@@ -172,16 +169,12 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
     let text = text.strip_prefix(BOM).unwrap_or(&text).to_string();
     let lines: Vec<&str> = text.split('\n').collect();
 
-    let mut open: isize = -1;
-    for (i, line) in lines.iter().enumerate() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        if OPEN_FENCE_RE.is_match(fence_line(line)) {
-            open = i as isize;
-        }
-        break;
-    }
+    let open: isize = lines
+        .iter()
+        .enumerate()
+        .find(|(_, line)| !line.trim().is_empty())
+        .filter(|(_, line)| OPEN_FENCE_RE.is_match(fence_line(line)))
+        .map_or(-1, |(i, _)| i as isize);
     if open == -1 {
         // A `---` block further down may be misplaced front matter: say so.
         if let Some(line) = misplaced_frontmatter(&lines) {
@@ -285,22 +278,21 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
         );
     };
 
-    for (key, value) in map.iter() {
-        let Some(key_str) = scalar_string(&key.data) else {
-            continue;
-        };
-        let key_line = key.span.start.line() + open + 1;
-        if !fm.entries.contains_key(&key_str) {
-            fm.keys.push(key_str.clone());
-        }
-        fm.entries.insert(
-            key_str,
-            Entry {
-                key_line,
-                value: to_value(value),
-            },
-        );
-    }
+    map.iter()
+        .filter_map(|(key, value)| Some((scalar_string(&key.data)?, key, value)))
+        .for_each(|(key_str, key, value)| {
+            let key_line = key.span.start.line() + open + 1;
+            if !fm.entries.contains_key(&key_str) {
+                fm.keys.push(key_str.clone());
+            }
+            fm.entries.insert(
+                key_str,
+                Entry {
+                    key_line,
+                    value: to_value(value),
+                },
+            );
+        });
 
     (fm, body, None)
 }
@@ -309,37 +301,27 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
 /// returning its 1-based opening line. Strict (must close, parse as a mapping,
 /// and carry `name` or `description`) so a markdown thematic break never matches.
 fn misplaced_frontmatter(lines: &[&str]) -> Option<usize> {
-    for (i, line) in lines.iter().enumerate() {
+    lines.iter().enumerate().find_map(|(i, line)| {
         if !OPEN_FENCE_RE.is_match(fence_line(line)) {
-            continue;
+            return None;
         }
-        let Some(close) = lines
+        let close = lines
             .iter()
             .enumerate()
             .skip(i + 1)
             .find(|(_, l)| CLOSE_FENCE_RE.is_match(fence_line(l)))
-            .map(|(j, _)| j)
-        else {
-            continue;
-        };
+            .map(|(j, _)| j)?;
         let block = lines[i + 1..close].join("\n");
-        let Ok(docs) = MarkedYaml::load_from_str(&block) else {
-            continue;
-        };
-        let Some(root) = docs.into_iter().next() else {
-            continue;
-        };
+        let docs = MarkedYaml::load_from_str(&block).ok()?;
+        let root = docs.into_iter().next()?;
         let YamlData::Mapping(map) = &root.data else {
-            continue;
+            return None;
         };
         let names_a_skill = map.keys().any(|k| {
             scalar_string(&k.data).is_some_and(|key| key == "name" || key == "description")
         });
-        if names_a_skill {
-            return Some(i + 1);
-        }
-    }
-    None
+        names_a_skill.then_some(i + 1)
+    })
 }
 
 /// Renders a scalar YAML node as a string. Shared with the config loader,

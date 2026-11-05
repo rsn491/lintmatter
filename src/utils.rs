@@ -15,14 +15,14 @@ pub fn humanize(n: i64) -> String {
     }
     let bytes = s.as_bytes();
     let len = bytes.len();
-    let mut out = String::with_capacity(len + len / 3);
-    for (i, b) in bytes.iter().enumerate() {
-        if i > 0 && (len - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(*b as char);
-    }
-    out
+    bytes
+        .iter()
+        .enumerate()
+        .flat_map(|(i, b)| {
+            let comma = (i > 0 && (len - i).is_multiple_of(3)).then_some(',');
+            comma.into_iter().chain(std::iter::once(*b as char))
+        })
+        .collect()
 }
 
 /// Formats a count with the right noun, as "1 file" or "2 files".
@@ -43,24 +43,23 @@ pub fn to_slash(path: &Path) -> String {
 /// touching the filesystem or following symlinks (mirroring Go's
 /// `filepath.Clean`). `..` above the root is dropped rather than escaping it.
 pub fn clean_path(path: &Path) -> PathBuf {
-    let mut out: Vec<Component> = Vec::new();
-    for comp in path.components() {
-        match comp {
-            Component::CurDir => {}
-            Component::ParentDir => match out.last() {
-                Some(Component::Normal(_)) => {
-                    out.pop();
-                }
-                Some(Component::RootDir) => {}
-                _ => out.push(comp),
-            },
-            other => out.push(other),
-        }
-    }
-    let mut result = PathBuf::new();
-    for c in out {
-        result.push(c.as_os_str());
-    }
+    let out = path
+        .components()
+        .fold(Vec::<Component>::new(), |mut out, comp| {
+            match comp {
+                Component::CurDir => {}
+                Component::ParentDir => match out.last() {
+                    Some(Component::Normal(_)) => {
+                        out.pop();
+                    }
+                    Some(Component::RootDir) => {}
+                    _ => out.push(comp),
+                },
+                other => out.push(other),
+            }
+            out
+        });
+    let result: PathBuf = out.iter().map(|c| c.as_os_str()).collect();
     if result.as_os_str().is_empty() {
         PathBuf::from(".")
     } else {

@@ -212,9 +212,9 @@ impl Cli {
                 return EXIT_USAGE;
             }
         };
-        for e in &outcome.unreadable {
+        outcome.unreadable.iter().for_each(|e| {
             let _ = writeln!(stderr, "lintmatter: {e}");
-        }
+        });
 
         let write_result =
             self.reporter(is_terminal)
@@ -262,9 +262,9 @@ pub fn run(
     };
 
     if f.list_rules {
-        for rule in lint::RULES.iter() {
+        lint::RULES.iter().for_each(|rule| {
             let _ = writeln!(stdout, "{rule}");
-        }
+        });
         return EXIT_OK;
     }
 
