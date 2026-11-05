@@ -3,8 +3,9 @@
 use std::io::Write;
 use std::path::PathBuf;
 
-use lintmatter::cli::{EXIT_FINDINGS, EXIT_OK, EXIT_USAGE, run};
-use lintmatter::{lint, report};
+use lintmatter::adapters::cli::{EXIT_FINDINGS, EXIT_OK, EXIT_USAGE, run};
+use lintmatter::adapters::report;
+use lintmatter::domain::lint;
 
 fn fixture(parts: &[&str]) -> String {
     let mut p = PathBuf::from("testdata");
@@ -345,7 +346,7 @@ fn usage_errors() {
         (
             "unknown rule",
             vec!["--disable", "no.such.rule"],
-            "unknown rule",
+            "unknown rule \"no.such.rule\" in --disable: run --list-rules to see them all",
         ),
         (
             "negative budget",

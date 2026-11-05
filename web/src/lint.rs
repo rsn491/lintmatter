@@ -8,7 +8,7 @@ use std::time::Duration;
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use lintmatter::config::{
+use lintmatter::domain::config::{
     DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_NAME_TOKENS,
     DEFAULT_MAX_SKILL_TOKENS,
 };
