@@ -2,6 +2,8 @@
 exclude:
   # Fixtures are broken on purpose.
   - testdata
+  # The README recording's demo repository, broken on purpose too.
+  - docs/demo
   - tmp
 
 # Example: switch a rule off by id (see `lintmatter --list-rules`).
