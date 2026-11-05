@@ -84,6 +84,8 @@ pub enum Problem {
     BadBoolean { key: String, text: String },
     #[error("{key} must be a non-empty string")]
     EmptyString { key: String },
+    #[error("{key} must be a string, not a list or mapping")]
+    NotString { key: String },
 }
 
 fn invalid(path: &str, line: usize, problem: Problem) -> ConfigError {
@@ -214,15 +216,12 @@ fn boolean(path: &str, key: &str, node: &MarkedYaml) -> Result<bool, ConfigError
 }
 
 fn string(path: &str, key: &str, node: &MarkedYaml) -> Result<String, ConfigError> {
+    let key = key.to_string();
+    let line = node.span.start.line();
     match scalar_string(&node.data) {
         Some(s) if !s.is_empty() => Ok(s),
-        _ => Err(invalid(
-            path,
-            node.span.start.line(),
-            Problem::EmptyString {
-                key: key.to_string(),
-            },
-        )),
+        Some(_) => Err(invalid(path, line, Problem::EmptyString { key })),
+        None => Err(invalid(path, line, Problem::NotString { key })),
     }
 }
 
@@ -344,7 +343,7 @@ rules:
             (
                 "exclude entry is a mapping",
                 "exclude:\n  - drop: true\n",
-                ".lintmatter.yaml:2: exclude must be a non-empty string",
+                ".lintmatter.yaml:2: exclude must be a string, not a list or mapping",
             ),
             (
                 "rules is not a mapping",
@@ -459,5 +458,17 @@ rules:
 
         // Then
         assert!(found.is_none());
+    }
+
+    #[test]
+    fn a_list_where_a_string_is_expected_is_not_called_empty() {
+        // Given
+        let src = "exclude: [[a]]\n";
+
+        // When
+        let err = parse(src, ".lintmatter.yaml").unwrap_err().to_string();
+
+        // Then
+        assert!(err.contains("must be a string"), "{err}");
     }
 }
