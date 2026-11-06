@@ -65,3 +65,8 @@ install-updater = false
 tap = "rsn491/homebrew-tap"
 # Publish jobs to run in CI
 publish-jobs = ["homebrew", "npm", "./publish-crate"]
+# Don't run the release workflow on pull requests; ci.yml covers them
+pr-run-mode = "skip"
+# release.yml carries a hand-added guard that the tag is on main, which dist
+# would otherwise reject as drift from the generated file
+allow-dirty = ["ci"]
