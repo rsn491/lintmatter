@@ -52,8 +52,8 @@ ci = "github"
 installers = ["shell", "homebrew", "npm"]
 # Publish prerelease tags to crates.io as prerelease versions too
 publish-prereleases = true
-# The crates.io publisher authenticates through GitHub OIDC
-github-custom-job-permissions = { "publish-crate" = { contents = "read", id-token = "write" } }
+# The crates.io and npm publishers authenticate through GitHub OIDC
+github-custom-job-permissions = { "publish-crate" = { contents = "read", id-token = "write" }, "publish-npm" = { contents = "read", id-token = "write" } }
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 github-custom-runners = { aarch64-apple-darwin = "macos-15" }
@@ -64,4 +64,4 @@ install-updater = false
 # A GitHub repo to push Homebrew formulas to
 tap = "rsn491/homebrew-tap"
 # Publish jobs to run in CI
-publish-jobs = ["homebrew", "npm", "./publish-crate"]
+publish-jobs = ["homebrew", "./publish-npm", "./publish-crate"]
