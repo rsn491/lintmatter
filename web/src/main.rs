@@ -12,6 +12,7 @@ const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 3000;
 const FAVICON_PNG: &[u8] = include_bytes!("../../docs/img/favicon.png");
 const SCORECARD_GIF: &[u8] = include_bytes!("../../docs/img/scorecard.gif");
+const SCORECARD_MOBILE_GIF: &[u8] = include_bytes!("../../docs/img/scorecard-mobile.gif");
 const THUMBNAIL_PNG: &[u8] = include_bytes!("../../docs/img/thumbnail.png");
 const PAGE_CLASS_PLACEHOLDER: &str = "{{PAGE_CLASS}}";
 const PAGE_TITLE_PLACEHOLDER: &str = "{{PAGE_TITLE}}";
@@ -35,6 +36,7 @@ async fn main() {
         .route("/demo", get(demo))
         .route("/favicon.png", get(favicon))
         .route("/scorecard.gif", get(scorecard))
+        .route("/scorecard-mobile.gif", get(scorecard_mobile))
         .route("/thumbnail.png", get(thumbnail))
         .route("/lint", post(lint::handle_lint));
 
@@ -83,10 +85,18 @@ async fn favicon() -> Response<Body> {
 }
 
 async fn scorecard() -> Response<Body> {
+    gif(SCORECARD_GIF)
+}
+
+async fn scorecard_mobile() -> Response<Body> {
+    gif(SCORECARD_MOBILE_GIF)
+}
+
+fn gif(bytes: &'static [u8]) -> Response<Body> {
     Response::builder()
         .header(header::CONTENT_TYPE, "image/gif")
         .header(header::CACHE_CONTROL, "public, max-age=86400")
-        .body(Body::from(SCORECARD_GIF))
+        .body(Body::from(bytes))
         .expect("static scorecard response is valid")
 }
 
@@ -238,7 +248,12 @@ mod tests {
             scorecard_pos < features_pos,
             "feature cards should follow the scorecard demo"
         );
+        assert!(
+            html.contains("srcset=\"/scorecard-mobile.gif\""),
+            "index.html is missing the phone-width scorecard demo"
+        );
         assert_eq!(&SCORECARD_GIF[..6], b"GIF89a");
+        assert_eq!(&SCORECARD_MOBILE_GIF[..6], b"GIF89a");
         assert_eq!(&THUMBNAIL_PNG[..8], b"\x89PNG\r\n\x1a\n");
         assert_eq!(&FAVICON_PNG[..8], b"\x89PNG\r\n\x1a\n");
         assert!(

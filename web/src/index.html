@@ -266,10 +266,6 @@
   .demo img {
     display: block;
     width: 100%;
-    /* The GIF is a ~60 column terminal, recorded tall and narrow so it stays
-       legible on a phone. Past this width a desktop would just blow it up. */
-    max-width: 600px;
-    margin: 0 auto;
     height: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -561,7 +557,12 @@
   </section>
 
   <figure class="demo">
-    <img src="/scorecard.gif" width="840" height="960" alt="lintmatter linting a repo with broken skills, then reporting a scorecard">
+    <picture>
+      <!-- A phone shows the wide GIF at about a quarter of its size, so small
+           screens get a narrow recording whose type stays legible. -->
+      <source media="(max-width: 640px)" srcset="/scorecard-mobile.gif" width="840" height="960">
+      <img src="/scorecard.gif" width="1350" height="540" alt="lintmatter linting a repo with broken skills, then reporting a scorecard">
+    </picture>
   </figure>
 
   <section class="features" aria-labelledby="features-heading">
