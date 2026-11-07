@@ -2,14 +2,16 @@ Output "docs/img/scorecard.gif"
 Set Shell "zsh"
 # Menlo on macOS; JetBrains Mono where Menlo isn't installed.
 Set FontFamily "Menlo, JetBrains Mono"
-# The README scales the GIF to the page width, so on a phone the text is only
-# as legible as the terminal is narrow. Width fits the widest line of the
-# report (128 columns, frontmatter.missing) at this FontSize and no more, and
-# Height fits the report, so no frame space is spent on empty terminal.
-# Change Width with FontSize, and grow both if the fixtures' output grows.
-Set FontSize 16
-Set Width 1350
-Set Height 540
+# The README and the homepage scale the GIF to the column width, so on a phone
+# the text is only as legible as the terminal is narrow. This records a ~60
+# column terminal (Width / glyph width at this FontSize): lintmatter wraps its
+# findings to the terminal width, so nothing is lost, and the type stays near
+# 10px on a 360px screen. Height fits the report so no frame space is spent on
+# empty terminal. Change Width with FontSize, and grow Height if the fixtures'
+# output grows.
+Set FontSize 22
+Set Width 840
+Set Height 960
 Set Padding 20
 Set Theme "Catppuccin Macchiato"
 Set WindowBar "Colorful"

@@ -17,7 +17,7 @@ Features:
 - Validates skill frontmatter
 - Validates token budgets for skills and AGENTS.md
 
-![lintmatter linting a repo with broken skills, then reporting a scorecard](docs/img/scorecard.gif)
+<img src="docs/img/scorecard.gif" alt="lintmatter linting a repo with broken skills, then reporting a scorecard" width="600">
 
 ## Quick start
 
