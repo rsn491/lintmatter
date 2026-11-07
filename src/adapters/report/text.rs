@@ -105,6 +105,41 @@ fn visible_width(s: &str) -> usize {
 pub struct TextReporter {
     pub quiet: bool,
     pub color: bool,
+    /// Terminal width in columns, when known. Only the decorated view wraps
+    /// against it; `None` (a pipe, a file) leaves every finding on one line.
+    pub width: Option<usize>,
+}
+
+/// Narrowest message column worth wrapping into; below it the terminal's own
+/// wrapping is no worse than ours.
+const MIN_WRAP_WIDTH: usize = 24;
+
+/// A finding's message broken into lines no wider than a budget.
+struct Wrapped {
+    lines: Vec<String>,
+    /// Whether the rule id fits after the last line. When it does not, it
+    /// gets a line of its own rather than being cut or pushed past the edge.
+    rule_inline: bool,
+}
+
+/// Breaks `message` on spaces into lines of at most `budget` characters. A
+/// single word wider than the budget keeps a line to itself, since cutting a
+/// path or identifier in half helps no one. Widths are counted in chars,
+/// which is exact for the ASCII these messages are made of.
+fn wrap_finding(message: &str, rule: &str, budget: usize) -> Wrapped {
+    let mut lines: Vec<String> = Vec::new();
+    message.split(' ').for_each(|word| match lines.last_mut() {
+        Some(line) if line.chars().count() + 1 + word.chars().count() <= budget => {
+            line.push(' ');
+            line.push_str(word);
+        }
+        _ => lines.push(word.to_string()),
+    });
+    let last = lines.last().map_or(0, |l| l.chars().count());
+    Wrapped {
+        rule_inline: last + 2 + rule.chars().count() <= budget,
+        lines,
+    }
 }
 
 impl Report for TextReporter {
@@ -153,15 +188,44 @@ impl Report for TextReporter {
                         Severity::Error => (ERROR_SYMBOL, RED),
                         Severity::Warning => (WARNING_SYMBOL, YELLOW),
                     };
-                    writeln!(
-                        w,
-                        "  {} {} {} {}  {}",
-                        paint(color, DIM, &format!("{line:>gutter$}")),
-                        paint(color, DIM, "\u{2502}"),
-                        paint(color, code, symbol),
-                        paint(color, code, &f.message),
-                        paint(color, DIM, f.rule),
-                    )
+                    // Columns taken before the message: indent, gutter, divider
+                    // and symbol, each with its spacing.
+                    let budget = self
+                        .width
+                        .map_or(usize::MAX, |cols| cols.saturating_sub(gutter + 7))
+                        .max(MIN_WRAP_WIDTH);
+                    let wrapped = wrap_finding(&f.message, f.rule, budget);
+                    let dim_gutter = |text: &str| {
+                        format!(
+                            "  {} {}",
+                            paint(color, DIM, &format!("{text:>gutter$}")),
+                            paint(color, DIM, "\u{2502}")
+                        )
+                    };
+                    wrapped.lines.iter().enumerate().try_for_each(|(i, text)| {
+                        // The symbol and line number mark the finding once;
+                        // continuation lines hang under the message.
+                        let (gutter_text, marker) = if i == 0 {
+                            (line.as_str(), paint(color, code, symbol))
+                        } else {
+                            ("", " ".to_string())
+                        };
+                        let rule = if wrapped.rule_inline && i + 1 == wrapped.lines.len() {
+                            format!("  {}", paint(color, DIM, f.rule))
+                        } else {
+                            String::new()
+                        };
+                        writeln!(
+                            w,
+                            "{} {marker} {}{rule}",
+                            dim_gutter(gutter_text),
+                            paint(color, code, text)
+                        )
+                    })?;
+                    if wrapped.rule_inline {
+                        return Ok(());
+                    }
+                    writeln!(w, "{}   {}", dim_gutter(""), paint(color, DIM, f.rule))
                 })?;
             } else {
                 writeln!(w, "{}  {}", escape_control(&r.path), r.score)?;
@@ -180,7 +244,7 @@ impl Report for TextReporter {
         // Perfect-score files are not listed above, so the card is the only
         // place that accounts for them.
         let clean_files = results.iter().filter(|r| r.score == 100).count();
-        write_scorecard(w, color, summary, clean_files)
+        write_scorecard(w, color, summary, clean_files, self.width)
     }
 }
 
@@ -192,6 +256,7 @@ fn write_scorecard(
     color: bool,
     s: &Summary,
     clean_files: usize,
+    width: Option<usize>,
 ) -> io::Result<()> {
     let band = score_band_label(s.score);
     let checked = plural(s.files, "file", "files");
@@ -245,16 +310,21 @@ fn write_scorecard(
         }),
         (clean_files > 0).then(|| paint(color, GREEN, &format!("\u{2714} {clean_files} clean"))),
     ];
-    let counts = segments
-        .into_iter()
-        .flatten()
-        .collect::<Vec<_>>()
-        .join("  ");
+    let segments: Vec<String> = segments.into_iter().flatten().collect();
+    // On a terminal too narrow for one counts line (the box adds six columns
+    // of border and padding), stack the counts a row each instead of letting
+    // the terminal break the box.
+    let joined = segments.join("  ");
+    let counts: Vec<String> = if width.is_some_and(|w| visible_width(&joined) + 6 > w) {
+        segments
+    } else {
+        vec![joined]
+    };
 
     // The title sits in the top edge, so the box needs no title row of its own.
     const TITLE: &str = " Summary ";
     let inner = visible_width(&headline)
-        .max(visible_width(&counts))
+        .max(counts.iter().map(|c| visible_width(c)).max().unwrap_or(0))
         .max(TITLE.len())
         + 4;
     // Tinted by the run's band rather than dimmed: a dim border all but
@@ -273,7 +343,7 @@ fn write_scorecard(
         ))
     )?;
     writeln!(w, "{}", row(&headline))?;
-    writeln!(w, "{}", row(&counts))?;
+    counts.iter().try_for_each(|c| writeln!(w, "{}", row(c)))?;
     writeln!(
         w,
         "{}",
@@ -289,11 +359,29 @@ mod tests {
     use crate::domain::summarize;
     use crate::domain::test_utils::results;
 
+    /// Drops SGR color codes so assertions can see the text a terminal shows.
+    fn strip_sgr(s: &str) -> String {
+        let mut out = String::new();
+        let mut chars = s.chars();
+        while let Some(c) = chars.next() {
+            if c == '\u{1b}' {
+                chars.by_ref().find(|&e| e == 'm');
+            } else {
+                out.push(c);
+            }
+        }
+        out
+    }
+
     fn render_text(results: &[FileResult], quiet: bool, color: bool) -> Vec<u8> {
         let mut buf = Vec::new();
-        TextReporter { quiet, color }
-            .render(&mut buf, results, &summarize(results))
-            .unwrap();
+        TextReporter {
+            quiet,
+            color,
+            width: None,
+        }
+        .render(&mut buf, results, &summarize(results))
+        .unwrap();
         buf
     }
 
@@ -425,6 +513,157 @@ mod tests {
         assert!(out.contains("1 with errors"), "{out}");
         assert!(out.contains("1 clean"), "{out}");
         assert!(out.contains('╭') && out.contains('╯'), "{out}");
+    }
+
+    #[test]
+    fn wrap_finding_breaks_on_spaces_and_keeps_the_rule_inline_when_it_fits() {
+        // Given
+        let message = "one two three four five";
+
+        // When
+        let wrapped = wrap_finding(message, "a.b", 12);
+
+        // Then
+        assert_eq!(wrapped.lines, ["one two", "three four", "five"]);
+        assert!(wrapped.rule_inline);
+    }
+
+    #[test]
+    fn wrap_finding_moves_the_rule_to_its_own_line_when_it_does_not_fit() {
+        // Given
+        let message = "one two three";
+
+        // When
+        let wrapped = wrap_finding(message, "frontmatter.missing", 13);
+
+        // Then
+        assert_eq!(wrapped.lines, ["one two three"]);
+        assert!(!wrapped.rule_inline);
+    }
+
+    #[test]
+    fn wrap_finding_never_splits_a_word_wider_than_the_budget() {
+        // Given
+        let message = "see skills/a-very-long-directory-name/SKILL.md now";
+
+        // When
+        let wrapped = wrap_finding(message, "x", 10);
+
+        // Then
+        assert!(
+            wrapped
+                .lines
+                .contains(&"skills/a-very-long-directory-name/SKILL.md".to_string()),
+            "{:?}",
+            wrapped.lines
+        );
+    }
+
+    #[test]
+    fn color_output_wraps_to_the_terminal_width_with_a_hanging_indent() {
+        // Given
+        let long = "name \"Bad_Name\" must be lowercase letters, digits and single hyphens (for example my-skill)";
+        let input = vec![FileResult {
+            path: "SKILL.md".to_string(),
+            kind: Kind::Skill,
+            tokens: Counts::default(),
+            score: 80,
+            findings: vec![Finding {
+                line: 12,
+                severity: Severity::Error,
+                rule: "name.format",
+                message: long.to_string(),
+            }],
+        }];
+        let mut buf = Vec::new();
+        TextReporter {
+            quiet: false,
+            color: true,
+            width: Some(50),
+        }
+        .render(&mut buf, &input, &summarize(&input))
+        .unwrap();
+
+        // When
+        let out = String::from_utf8(buf).unwrap();
+        let finding_lines: Vec<&str> = out
+            .lines()
+            .skip_while(|l| !l.contains("SKILL.md"))
+            .skip(1)
+            .take_while(|l| !l.is_empty())
+            .collect();
+
+        // Then
+        assert!(finding_lines.len() > 1, "{out}");
+        assert!(
+            finding_lines.iter().all(|l| visible_width(l) <= 50),
+            "{out}"
+        );
+        // The line number and symbol appear once; the rest hang beneath.
+        assert_eq!(out.matches("12").count(), 1, "{out}");
+        assert!(finding_lines[0].contains(ERROR_SYMBOL), "{out}");
+        assert!(
+            finding_lines[1..].iter().all(|l| !l.contains(ERROR_SYMBOL)),
+            "{out}"
+        );
+        assert!(out.contains("name.format"), "{out}");
+    }
+
+    #[test]
+    fn color_summary_stacks_its_counts_on_a_narrow_terminal() {
+        // Given
+        let input = results();
+        let render = |width| {
+            let mut buf = Vec::new();
+            TextReporter {
+                quiet: false,
+                color: true,
+                width,
+            }
+            .render(&mut buf, &input, &summarize(&input))
+            .unwrap();
+            String::from_utf8(buf).unwrap()
+        };
+
+        // When
+        let wide = render(Some(120));
+        let narrow = render(Some(40));
+
+        // Then
+        let (wide, narrow) = (strip_sgr(&wide), strip_sgr(&narrow));
+        let card_rows = |out: &str| out.lines().filter(|l| l.starts_with('│')).count();
+        assert_eq!(card_rows(&wide), 2, "{wide}");
+        assert!(card_rows(&narrow) > 2, "{narrow}");
+        assert!(
+            narrow
+                .lines()
+                .filter(|l| l.starts_with(['╭', '│', '╰']))
+                .all(|l| visible_width(l) <= 40),
+            "{narrow}"
+        );
+    }
+
+    #[test]
+    fn plain_output_never_wraps() {
+        // Given
+        let input = results();
+        let mut buf = Vec::new();
+        TextReporter {
+            quiet: false,
+            color: false,
+            width: Some(20),
+        }
+        .render(&mut buf, &input, &summarize(&input))
+        .unwrap();
+
+        // When
+        let out = String::from_utf8(buf).unwrap();
+
+        // Then
+        assert_eq!(
+            out,
+            String::from_utf8(render_text(&input, false, false)).unwrap()
+        );
     }
 
     #[test]
