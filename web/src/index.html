@@ -557,7 +557,12 @@
   </section>
 
   <figure class="demo">
-    <img src="/scorecard.gif" alt="lintmatter linting a repo with broken skills, then reporting a scorecard">
+    <picture>
+      <!-- A phone shows the wide GIF at about a quarter of its size, so small
+           screens get a narrow recording whose type stays legible. -->
+      <source media="(max-width: 640px)" srcset="/scorecard-mobile.gif" width="840" height="960">
+      <img src="/scorecard.gif" width="1350" height="540" alt="lintmatter linting a repo with broken skills, then reporting a scorecard">
+    </picture>
   </figure>
 
   <section class="features" aria-labelledby="features-heading">

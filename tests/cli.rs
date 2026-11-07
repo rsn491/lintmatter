@@ -360,7 +360,7 @@ fn color_flag_controls_decoration() {
 
     assert!(always_stdout.contains('\u{1b}'), "{always_stdout}");
     assert!(
-        always_stdout.contains("\u{274c}") || always_stdout.contains("\u{26a0}"),
+        always_stdout.contains("\u{2716}") || always_stdout.contains("\u{25b2}"),
         "{always_stdout}"
     );
 

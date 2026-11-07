@@ -204,6 +204,12 @@ impl Cli {
             Box::new(report::TextReporter {
                 quiet: self.quiet,
                 color: resolve_color(self.color, is_terminal),
+                // Only a real terminal has a width to wrap to; a pipe or a
+                // file gets one finding per line.
+                width: is_terminal
+                    .then(terminal_size::terminal_size)
+                    .flatten()
+                    .map(|(width, _)| usize::from(width.0)),
             })
         }
     }
