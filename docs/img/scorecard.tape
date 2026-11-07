@@ -14,13 +14,13 @@ Set Padding 20
 Set Theme "Catppuccin Macchiato"
 Set WindowBar "Colorful"
 Set WindowBarSize 40
-Set TypingSpeed 45ms
+Set TypingSpeed 90ms
 
 # Prepare the development binary and color environment without recording setup.
 Hide
 Type "unset NO_COLOR"
 Enter
-Type "lintmatter() { ./target/debug/lintmatter testdata/broken; tput civis; sleep 10; }"
+Type "lintmatter() { sleep 0.9; ./target/debug/lintmatter testdata/broken; tput civis; sleep 10; }"
 Enter
 Type "clear"
 Enter
@@ -28,4 +28,5 @@ Show
 
 Type "lintmatter testdata/broken"
 Enter
-Sleep 5s
+# The 0.9s pause inside the function above, then the report holds on screen.
+Sleep 6s
