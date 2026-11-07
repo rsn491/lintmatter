@@ -95,9 +95,9 @@ Run-behavior settings (how results are reported, not what is a violation) go on
 - Modules use `foo.rs` + `foo/`, never `mod.rs` (enforced by
   `clippy::mod_module_files`); `foo.rs` only declares and re-exports.
 - Lint policy lives in `[workspace.lints]` (root `Cargo.toml`) and `clippy.toml`:
-  `unsafe_code` is forbidden, `unwrap`/`panic`/indexing are warnings outside
-  tests, and pedantic is on. Fix a hit rather than allow it; when an allowance
-  is right, use `#[expect(...)]` with the reason beside it.
+  `unsafe_code` is forbidden, `unwrap`/`panic`/indexing warn outside tests,
+  pedantic is on. Fix a hit rather than allow it; if an allowance is right, use
+  `#[expect(...)]` with the reason beside it.
 - Prefer errors for anything that breaks a file's contract with the runtime, and
   warnings for stylistic mismatches. Warnings alone exit 0.
 - Findings come out in registry order because the rules run in that order, so

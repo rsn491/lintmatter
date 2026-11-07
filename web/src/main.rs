@@ -207,57 +207,42 @@ mod tests {
         let cargo_command = "cargo install lintmatter";
         let npm_command = "npm install -g lintmatter";
 
+        let required = [
+            (curl_command, "the curl installer command"),
+            (brew_command, "the Homebrew installer command"),
+            (cargo_command, "the Cargo installer command"),
+            (npm_command, "the npm installer command"),
+            (">Curl</button>", "the Curl installation method"),
+            (">Homebrew</button>", "the Homebrew installation method"),
+            (">Cargo</button>", "the Cargo installation method"),
+            (">npm</button>", "the npm installation method"),
+            (
+                "class=\"shell-prompt\" aria-hidden=\"true\">$ </span>",
+                "the shell prompt",
+            ),
+            (
+                "aria-label=\"Copy installation command\"",
+                "the accessible copy control",
+            ),
+            ("src=\"/scorecard.gif\"", "the scorecard demo"),
+            ("class=\"tool-description\"", "the compact tool description"),
+            (
+                "srcset=\"/scorecard-mobile.gif\"",
+                "the phone-width scorecard demo",
+            ),
+        ];
+
         // When
         let scorecard_pos = html.find("src=\"/scorecard.gif\"");
         let features_pos = html.find("class=\"features\"");
 
         // Then
-        assert!(
-            html.contains(curl_command),
-            "index.html is missing the curl installer command"
-        );
-        assert!(
-            html.contains(brew_command),
-            "index.html is missing the Homebrew installer command"
-        );
-        assert!(
-            html.contains(cargo_command),
-            "index.html is missing the Cargo installer command"
-        );
-        assert!(
-            html.contains(npm_command),
-            "index.html is missing the npm installer command"
-        );
-        assert!(
-            html.contains(">Curl</button>")
-                && html.contains(">Homebrew</button>")
-                && html.contains(">Cargo</button>")
-                && html.contains(">npm</button>"),
-            "index.html is missing an installation method"
-        );
-        assert!(
-            html.contains("class=\"shell-prompt\" aria-hidden=\"true\">$ </span>"),
-            "index.html is missing the shell prompt"
-        );
-        assert!(
-            html.contains("aria-label=\"Copy installation command\""),
-            "index.html is missing the accessible copy control"
-        );
-        assert!(
-            html.contains("src=\"/scorecard.gif\""),
-            "index.html is missing the scorecard demo"
-        );
-        assert!(
-            html.contains("class=\"tool-description\""),
-            "index.html is missing the compact tool description"
-        );
+        for (needle, what) in required {
+            assert!(html.contains(needle), "index.html is missing {what}");
+        }
         assert!(
             scorecard_pos < features_pos,
             "feature cards should follow the scorecard demo"
-        );
-        assert!(
-            html.contains("srcset=\"/scorecard-mobile.gif\""),
-            "index.html is missing the phone-width scorecard demo"
         );
         assert_eq!(&SCORECARD_GIF[..6], b"GIF89a");
         assert_eq!(&SCORECARD_MOBILE_GIF[..6], b"GIF89a");

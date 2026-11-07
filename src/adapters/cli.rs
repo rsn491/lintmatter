@@ -148,6 +148,7 @@ fn budget(raw: &str) -> Result<i64, String> {
 /// Finds the config file for this run: the one named by `--config`, or the
 /// nearest `.lintmatter.yaml` at or above the working directory. `--no-config`
 /// skips the search, and finding nothing is not an error.
+#[expect(clippy::print_stderr)]
 fn load_config(f: &Flags, cwd: &Path) -> Result<Settings, CliError> {
     if let Some(path) = &f.config {
         return Ok(config_file::load(Path::new(path))?);

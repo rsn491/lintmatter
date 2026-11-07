@@ -204,13 +204,13 @@ fn json_output() {
     let mut total = 0;
     for file in files {
         paths.push(file["path"].as_str().unwrap().to_string());
-        assert!(!file["kind"].as_str().unwrap().is_empty());
+        assert_ne!(file["kind"].as_str().unwrap(), "");
         let score = file["score"].as_u64().unwrap();
         assert!(score <= 100, "{score}");
         total += score;
         for finding in file["findings"].as_array().unwrap() {
             assert_eq!(finding["file"], file["path"]);
-            assert!(!finding["message"].as_str().unwrap().is_empty());
+            assert_ne!(finding["message"].as_str().unwrap(), "");
         }
     }
     let files = files.len() as u64;
