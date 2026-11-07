@@ -239,6 +239,17 @@ fn split(src: &[u8]) -> (Frontmatter, String, Option<Error>) {
         ..Default::default()
     };
 
+    if let Some(why) = unsafe_yaml(&block) {
+        return (
+            fm,
+            body,
+            Some(Error {
+                kind: ErrKind::InvalidYaml,
+                line: open + 1,
+                msg: format!("invalid YAML in front matter: {why}"),
+            }),
+        );
+    }
     let docs = match MarkedYaml::load_from_str(&block) {
         Ok(docs) => docs,
         Err(e) => {
@@ -312,6 +323,9 @@ fn misplaced_frontmatter(lines: &[&str]) -> Option<usize> {
             .find(|(_, l)| CLOSE_FENCE_RE.is_match(fence_line(l)))
             .map(|(j, _)| j)?;
         let block = lines[i + 1..close].join("\n");
+        if unsafe_yaml(&block).is_some() {
+            return None;
+        }
         let docs = MarkedYaml::load_from_str(&block).ok()?;
         let root = docs.into_iter().next()?;
         let YamlData::Mapping(map) = &root.data else {
@@ -322,6 +336,67 @@ fn misplaced_frontmatter(lines: &[&str]) -> Option<usize> {
         });
         names_a_skill.then_some(i + 1)
     })
+}
+
+/// The most YAML we parse from one block; real front matter and config are a
+/// few hundred bytes.
+const MAX_YAML_BYTES: usize = 64 * 1024;
+const MAX_YAML_DEPTH: usize = 32;
+
+/// Why `src` must not reach the YAML parser, if it must not. The parser
+/// deep-copies an anchored node at every alias and has no depth limit, so a few
+/// hundred bytes of nested aliases or brackets can exhaust memory or the stack
+/// of a run over a tree it does not trust. Aliases have no use in instruction
+/// files, so they are refused rather than bounded. Shared with the config loader.
+pub fn unsafe_yaml(src: &str) -> Option<&'static str> {
+    if src.len() > MAX_YAML_BYTES {
+        return Some("YAML block is larger than 64 KiB");
+    }
+    let mut flow = 0usize;
+    for line in src.lines() {
+        let indent = line.len() - line.trim_start().len();
+        if indent > MAX_YAML_DEPTH * 4 {
+            return Some("YAML is nested too deeply");
+        }
+        let mut rest = line.trim_start();
+        while let Some(r) = rest.strip_prefix("- ") {
+            rest = r.trim_start();
+        }
+        if let Some((_, value)) = rest.split_once(": ") {
+            rest = value.trim_start();
+        }
+        // `* item` is a bullet in a block scalar; an alias names an anchor.
+        let alias = |s: &str| {
+            s.strip_prefix('*')
+                .is_some_and(|n| n.starts_with(|c: char| !c.is_whitespace()))
+        };
+        if alias(rest) {
+            return Some("YAML aliases are not supported");
+        }
+        let mut node_start = true;
+        for (i, c) in rest.char_indices() {
+            match c {
+                '[' | '{' => {
+                    flow += 1;
+                    if flow > MAX_YAML_DEPTH {
+                        return Some("YAML is nested too deeply");
+                    }
+                    node_start = true;
+                }
+                ']' | '}' => {
+                    flow = flow.saturating_sub(1);
+                    node_start = false;
+                }
+                ',' => node_start = true,
+                '*' if node_start && alias(&rest[i..]) => {
+                    return Some("YAML aliases are not supported");
+                }
+                c if c.is_whitespace() => {}
+                _ => node_start = false,
+            }
+        }
+    }
+    None
 }
 
 /// Renders a scalar YAML node as a string. Shared with the config loader,
@@ -648,5 +723,20 @@ mod tests {
         // Then
         assert!(err.is_none());
         assert!(matches!(node, Some(Value::Mapping)));
+    }
+
+    #[test]
+    fn unsafe_yaml_refuses_alias_bombs_and_deep_nesting() {
+        // Given
+        let bomb = "a: &a [x]\nb: &b [*a,*a,*a]\nc: [*b,*b,*b]\n";
+        let deep = format!("k: {}{}\n", "[".repeat(40), "]".repeat(40));
+        let big = format!("k: {}\n", "a".repeat(70_000));
+        let fine = "name: x\ndescription: |\n  * a bullet\n  and *.md globs\nlist: [a, b]\n";
+
+        // When / Then
+        assert!(unsafe_yaml(bomb).is_some());
+        assert!(unsafe_yaml(&deep).is_some());
+        assert!(unsafe_yaml(&big).is_some());
+        assert!(unsafe_yaml(fine).is_none());
     }
 }

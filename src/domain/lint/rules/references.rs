@@ -68,7 +68,7 @@ impl Rule for Missing {
                     return;
                 }
                 sink.applies();
-                if !ctx.exists(&resolved) {
+                if !ctx.exists(&root, &resolved) {
                     sink.error(
                         offset + i + 1,
                         format!("referenced file {target:?} does not exist"),

@@ -639,12 +639,17 @@ fn an_unreadable_file_is_reported_but_does_not_abort_the_run() {
     std::fs::write(dir.path().join("AGENTS.md"), "readable instructions\n").unwrap();
     let sub = dir.path().join("sub");
     std::fs::create_dir(&sub).unwrap();
-    std::os::unix::fs::symlink("/nonexistent-target", sub.join("AGENTS.md")).unwrap();
+    let locked = sub.join("AGENTS.md");
+    std::fs::write(&locked, "locked\n").unwrap();
+    std::fs::set_permissions(&locked, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
 
     // When
     let (code, stdout, stderr) = run_args(&[&dir.path().to_string_lossy()]);
 
     // Then
+    if std::fs::read(&locked).is_ok() {
+        return; // running as root: permissions do not apply
+    }
     assert!(stderr.contains("cannot read"), "{stderr}");
     assert!(stdout.contains("1 file checked"), "{stdout}");
     assert_eq!(code, EXIT_FINDINGS, "stdout={stdout} stderr={stderr}");
@@ -721,4 +726,56 @@ fn no_paths_defaults_to_current_directory() {
     // Then
     assert_eq!(code_default, code_dot);
     assert_eq!(stdout_default, stdout_dot);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_symlinked_instruction_file_is_not_followed() {
+    // Given
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("AGENTS.md"), "real instructions\n").unwrap();
+    let sub = dir.path().join("sub");
+    std::fs::create_dir(&sub).unwrap();
+    std::os::unix::fs::symlink("/etc/passwd", sub.join("AGENTS.md")).unwrap();
+
+    // When
+    let (_, stdout, stderr) = run_args(&[&dir.path().to_string_lossy()]);
+
+    // Then
+    assert!(stdout.contains("1 file checked"), "{stdout}");
+    assert!(!stdout.contains("root:") && !stderr.contains("root:"));
+}
+
+#[test]
+fn an_oversized_instruction_file_is_reported_not_loaded() {
+    // Given
+    let dir = tempfile::tempdir().unwrap();
+    let big = vec![b'a'; 5 * 1024 * 1024];
+    std::fs::write(dir.path().join("AGENTS.md"), big).unwrap();
+
+    // When
+    let (code, _, stderr) = run_args(&[&dir.path().to_string_lossy()]);
+
+    // Then
+    assert!(stderr.contains("cannot read"), "{stderr}");
+    assert_eq!(code, EXIT_FINDINGS);
+}
+
+#[cfg(unix)]
+#[test]
+fn a_reference_through_a_symlink_out_of_the_tree_reveals_nothing() {
+    // Given
+    let dir = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink("/", dir.path().join("docs")).unwrap();
+    std::fs::write(
+        dir.path().join("AGENTS.md"),
+        "See [a](docs/etc/passwd) and [b](docs/no/such/host/path).\n",
+    )
+    .unwrap();
+
+    // When
+    let (_, stdout, _) = run_args(&[&dir.path().to_string_lossy()]);
+
+    // Then
+    assert!(!stdout.contains("does not exist"), "{stdout}");
 }
