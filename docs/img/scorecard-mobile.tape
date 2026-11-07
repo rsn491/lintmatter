@@ -23,7 +23,7 @@ Set TypingSpeed 70ms
 Hide
 Type "unset NO_COLOR"
 Enter
-Type "lintmatter() { sleep 0.9; echo; ./target/debug/lintmatter testdata/broken; tput civis; sleep 10; }"
+Type "lintmatter() { sleep 0.9; ./target/debug/lintmatter testdata/broken; tput civis; sleep 10; }"
 Enter
 Type "clear"
 Enter
