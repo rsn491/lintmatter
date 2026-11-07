@@ -138,10 +138,9 @@ impl Report for TextReporter {
                     .unwrap_or(1);
                 writeln!(
                     w,
-                    "{} {}  {} {}",
+                    "{} {}  {}",
                     paint(color, DIM, "\u{25b8}"),
                     paint(color, BOLD, &escape_control(&r.path)),
-                    score_bar(r.score),
                     paint_score(color, r.score)
                 )?;
                 findings.iter().try_for_each(|f| {
