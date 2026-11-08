@@ -12,6 +12,12 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+## Releasing
+
+Run `scripts/bump-version.sh X.Y.Z` before tagging. The version lives in
+`Cargo.toml`, `web/Cargo.toml` and `action.yml`'s `version` default, and CI
+(`.github/action/test.sh`) fails if they drift apart.
+
 ## Layout
 
 Ports and adapters: dependencies point inward only, `adapters` → `application`
