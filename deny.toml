@@ -28,7 +28,8 @@ ignore = true
 # Deny duplicate versions of the same crate; use skip entries for known,
 # unavoidable duplicates caused by mismatched transitive requirements.
 multiple-versions = "deny"
-wildcards = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
 highlight = "all"
 skip = []
 
