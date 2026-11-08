@@ -147,17 +147,18 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
                 cfg.max_skill_description_tokens = Some(budget(path, &name, value)?);
             }
             "exclude" => cfg.excludes = string_list(path, &name, value)?,
-            "rules" => cfg.disabled = rules(path, value)?,
+            "rules" => (cfg.disabled, cfg.enabled) = rules(path, value)?,
             _ => return Err(invalid(path, line, Problem::UnknownSetting(name))),
         }
         Ok(cfg)
     })
 }
 
-/// Reads `rules:`, a mapping of rule id to whether it runs. Only the ids
-/// switched off are returned; naming a rule that lintmatter does not have is an
+/// Reads `rules:`, a mapping of rule id to whether it runs. Returns the ids
+/// switched off and the ids switched on, each in file order: the latter lets a
+/// file re-enable a rule that is off by default. Naming a rule that lintmatter does not have is an
 /// error rather than a silent no-op, the same way `--disable` rejects typos.
-fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, ConfigError> {
+fn rules(path: &str, node: &MarkedYaml) -> Result<(Vec<String>, Vec<String>), ConfigError> {
     let YamlData::Mapping(map) = &node.data else {
         return Err(invalid(
             path,
@@ -166,8 +167,10 @@ fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, ConfigError> {
         ));
     };
 
-    map.iter()
-        .map(|(key, value)| {
+    let mut off = Vec::new();
+    let mut on = Vec::new();
+    for (key, value) in map {
+        {
             let key_line = key.span.start.line();
             let Some(rule) = scalar_string(&key.data) else {
                 return Err(invalid(path, key_line, Problem::NonStringRuleId));
@@ -175,11 +178,14 @@ fn rules(path: &str, node: &MarkedYaml) -> Result<Vec<String>, ConfigError> {
             if !RULES.contains(&rule.as_str()) {
                 return Err(invalid(path, key_line, Problem::UnknownRule(rule)));
             }
-            let enabled = boolean(path, &format!("rules.{rule}"), value)?;
-            Ok((!enabled).then_some(rule))
-        })
-        .filter_map(Result::transpose)
-        .collect()
+            if boolean(path, &format!("rules.{rule}"), value)? {
+                on.push(rule);
+            } else {
+                off.push(rule);
+            }
+        }
+    }
+    Ok((off, on))
 }
 
 /// Reads a token budget. Zero disables the check it belongs to, matching the
@@ -276,11 +282,12 @@ rules:
                 max_skill_name_tokens: Some(8),
                 max_skill_description_tokens: Some(64),
                 excludes: vec!["testdata".to_string(), "examples/**".to_string()],
-                // Only the rules switched off are collected, in file order.
+                // Rules are collected by direction, in file order.
                 disabled: vec![
                     "name.dir-mismatch".to_string(),
                     "frontmatter.unknown-key".to_string(),
                 ],
+                enabled: vec!["tokens.content".to_string()],
             }
         );
     }
