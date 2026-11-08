@@ -49,7 +49,7 @@ pub fn resolve(flags: Settings, file: Settings, strict: bool, paths: Vec<String>
     let mut disabled: Vec<String> = DEFAULT_DISABLED_RULES
         .iter()
         .filter(|r| !file.enabled.iter().any(|e| e == **r))
-        .map(|r| r.to_string())
+        .map(ToString::to_string)
         .collect();
     disabled.extend(file.disabled);
     disabled.extend(flags.disabled);
