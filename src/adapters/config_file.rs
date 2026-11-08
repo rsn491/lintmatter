@@ -141,7 +141,7 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
             "max-agents-tokens" => cfg.max_agents_tokens = Some(budget(path, &name, value)?),
             "max-skill-tokens" => cfg.max_skill_tokens = Some(budget(path, &name, value)?),
             "max-skill-name-tokens" => {
-                cfg.max_skill_name_tokens = Some(budget(path, &name, value)?)
+                cfg.max_skill_name_tokens = Some(budget(path, &name, value)?);
             }
             "max-skill-description-tokens" => {
                 cfg.max_skill_description_tokens = Some(budget(path, &name, value)?);

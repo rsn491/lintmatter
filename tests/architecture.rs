@@ -13,6 +13,9 @@
 //! layers until someone decides otherwise. Test code is exempt: items under
 //! `#[cfg(test)]` and `test_utils.rs` fixtures may touch the disk.
 
+// Helper functions here are test code, which clippy only recognises inside `#[test]` fns.
+#![allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};

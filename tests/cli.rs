@@ -1,5 +1,8 @@
 //! End-to-end tests driving `cli::run` in-process over `testdata/`.
 
+// Helper functions here are test code, which clippy only recognises inside `#[test]` fns.
+#![allow(clippy::unwrap_used)]
+
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -17,7 +20,7 @@ fn fixture(parts: &[&str]) -> String {
 
 /// Runs the CLI verbatim, config discovery included.
 fn run_raw(args: &[&str]) -> (i32, String, String) {
-    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    let args: Vec<String> = args.iter().map(ToString::to_string).collect();
     let mut out = Vec::new();
     let mut err = Vec::new();
     let code = run(&args, &mut out, &mut err, false);
@@ -201,13 +204,13 @@ fn json_output() {
     let mut total = 0;
     for file in files {
         paths.push(file["path"].as_str().unwrap().to_string());
-        assert!(!file["kind"].as_str().unwrap().is_empty());
+        assert_ne!(file["kind"].as_str().unwrap(), "");
         let score = file["score"].as_u64().unwrap();
         assert!(score <= 100, "{score}");
         total += score;
         for finding in file["findings"].as_array().unwrap() {
             assert_eq!(finding["file"], file["path"]);
-            assert!(!finding["message"].as_str().unwrap().is_empty());
+            assert_ne!(finding["message"].as_str().unwrap(), "");
         }
     }
     let files = files.len() as u64;

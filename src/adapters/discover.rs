@@ -141,6 +141,7 @@ impl Discoverer {
         }
     }
 
+    #[expect(clippy::print_stderr)]
     fn walk(&mut self, root: &Path, dir: &Path, depth: usize) -> Result<(), DiscoverError> {
         // One unreadable or pathological directory must not hide every other
         // result, so a problem below the paths we were given is reported and
@@ -159,7 +160,7 @@ impl Discoverer {
                 return Ok(());
             }
         };
-        entries.sort_by_key(|e| e.file_name());
+        entries.sort_by_key(fs::DirEntry::file_name);
 
         entries.into_iter().try_for_each(|entry| {
             let path = entry.path();
@@ -208,6 +209,7 @@ impl Discoverer {
 }
 
 /// Says on stderr what was left out and why; the run carries on.
+#[expect(clippy::print_stderr)]
 fn warn_skipped(e: &DiscoverError) {
     eprintln!("lintmatter: skipping: {}", escape_control(&e.to_string()));
 }
@@ -338,8 +340,8 @@ mod tests {
             ),
         ];
         for (excludes, want) in cases {
-            let excludes: Vec<String> = excludes.iter().map(|s| s.to_string()).collect();
-            let want: Vec<String> = want.iter().map(|s| s.to_string()).collect();
+            let excludes: Vec<String> = excludes.iter().map(ToString::to_string).collect();
+            let want: Vec<String> = want.iter().map(ToString::to_string).collect();
 
             // When
             let targets = find(std::slice::from_ref(&root), &excludes).unwrap();

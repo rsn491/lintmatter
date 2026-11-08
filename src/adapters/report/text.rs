@@ -258,6 +258,9 @@ fn write_scorecard(
     clean_files: usize,
     width: Option<usize>,
 ) -> io::Result<()> {
+    // The title sits in the top edge, so the box needs no title row of its own.
+    const TITLE: &str = " Summary ";
+
     let band = score_band_label(s.score);
     let checked = plural(s.files, "file", "files");
     if !color {
@@ -321,8 +324,6 @@ fn write_scorecard(
         vec![joined]
     };
 
-    // The title sits in the top edge, so the box needs no title row of its own.
-    const TITLE: &str = " Summary ";
     let inner = visible_width(&headline)
         .max(counts.iter().map(|c| visible_width(c)).max().unwrap_or(0))
         .max(TITLE.len())
