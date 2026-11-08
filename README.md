@@ -90,10 +90,6 @@ lintmatter --strict --format json .
 | `tokens.description` | error | `description` within its token budget |
 | `file-reference.missing` | error | Every relative markdown link outside inline code, and every `./`- or `../`-prefixed file path in inline code, resolves to a file that exists |
 
-`frontmatter.unknown-key` is off by default, since extra keys are usually a
-tool's own extension. Turn it on with `frontmatter.unknown-key: true` under
-`rules:` in `.lintmatter.yaml`.
-
 Switch any of them off by id:
 ```sh
 lintmatter --disable name.dir-mismatch --disable name.format .
