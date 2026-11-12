@@ -9,6 +9,12 @@ pub const DEFAULT_MAX_SKILL_TOKENS: i64 = 5000;
 pub const DEFAULT_MAX_SKILL_NAME_TOKENS: i64 = 16;
 pub const DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS: i64 = 100;
 
+/// Rules that are off until a config file's `rules:` mapping turns them on.
+/// Not part of `Config::default`: that keeps every rule running so the linter
+/// can still be exercised on it; the settings layer applies this list. Unknown
+/// front-matter keys are usually a tool's own extension, not a mistake.
+pub const DEFAULT_DISABLED_RULES: &[&str] = &["frontmatter.unknown-key"];
+
 /// Holds the thresholds and switches that shape a run.
 #[derive(Debug, Clone)]
 pub struct Config {

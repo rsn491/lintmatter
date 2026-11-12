@@ -8,8 +8,8 @@ use std::collections::HashSet;
 
 use crate::domain::Config;
 use crate::domain::config::{
-    DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_NAME_TOKENS,
-    DEFAULT_MAX_SKILL_TOKENS,
+    DEFAULT_DISABLED_RULES, DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
+    DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
 };
 use crate::domain::lint::RULES;
 
@@ -26,6 +26,8 @@ pub struct Settings {
     pub excludes: Vec<String>,
     /// Rule ids to switch off.
     pub disabled: Vec<String>,
+    /// Rule ids to switch on, overriding `DEFAULT_DISABLED_RULES`.
+    pub enabled: Vec<String>,
 }
 
 /// What a run actually uses once every source has been merged.
@@ -44,7 +46,12 @@ pub struct RunSettings {
 pub fn resolve(flags: Settings, file: Settings, strict: bool, paths: Vec<String>) -> RunSettings {
     let mut excludes = file.excludes;
     excludes.extend(flags.excludes);
-    let mut disabled = file.disabled;
+    let mut disabled: Vec<String> = DEFAULT_DISABLED_RULES
+        .iter()
+        .filter(|r| !file.enabled.iter().any(|e| e == **r))
+        .map(ToString::to_string)
+        .collect();
+    disabled.extend(file.disabled);
     disabled.extend(flags.disabled);
 
     RunSettings {
@@ -147,9 +154,27 @@ mod tests {
         // Then
         assert_eq!(resolved.config.max_skill_tokens, 9);
         assert_eq!(resolved.excludes, vec!["a", "b"]);
-        assert_eq!(resolved.config.disabled, vec!["name.length", "name.format"]);
+        assert_eq!(
+            resolved.config.disabled,
+            vec!["frontmatter.unknown-key", "name.length", "name.format"]
+        );
         assert!(resolved.config.strict);
         assert_eq!(resolved.paths, vec!["x"]);
+    }
+
+    #[test]
+    fn file_can_switch_a_default_off_rule_back_on() {
+        // Given
+        let file = Settings {
+            enabled: vec!["frontmatter.unknown-key".into()],
+            ..Default::default()
+        };
+
+        // When
+        let resolved = resolve(Settings::default(), file, false, vec![]);
+
+        // Then
+        assert_eq!(resolved.config.disabled, Vec::<String>::new());
     }
 
     #[test]

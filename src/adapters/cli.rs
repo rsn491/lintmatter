@@ -192,6 +192,7 @@ impl Cli {
             max_skill_description_tokens: f.max_skill_description_tokens,
             excludes: f.excludes,
             disabled: f.disabled,
+            enabled: Vec::new(),
         };
         Ok(Cli {
             settings: settings::resolve(flags, file_cfg, f.strict, f.paths),

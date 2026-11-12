@@ -143,12 +143,15 @@ fn broken_tree_exits_one() {
         lint::RULE_FRONTMATTER_UNTERMINATED,
         lint::RULE_NAME_FORMAT,
         lint::RULE_NAME_DIR_MISMATCH,
-        lint::RULE_FRONTMATTER_UNKNOWN_KEY,
         lint::RULE_DESCRIPTION_LENGTH,
         lint::RULE_TOKENS_DESCRIPTION,
     ] {
         assert!(stdout.contains(want), "stdout missing {want}:\n{stdout}");
     }
+    assert!(
+        !stdout.contains(lint::RULE_FRONTMATTER_UNKNOWN_KEY),
+        "off by default:\n{stdout}"
+    );
     assert!(!stdout.contains("node_modules"), "{stdout}");
 }
 
@@ -458,6 +461,22 @@ fn usage_errors() {
         "stdout={flag_stdout} stderr={flag_stderr}"
     );
     assert!(flag_stderr.contains("unexpected argument"), "{flag_stderr}");
+}
+
+#[test]
+fn config_file_can_enable_unknown_key_rule() {
+    // Given
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = write_config(&dir, "rules:\n  frontmatter.unknown-key: true\n");
+
+    // When
+    let (_, stdout, stderr) = run_raw(&["--config", &cfg, &fixture(&["broken"])]);
+
+    // Then
+    assert!(
+        stdout.contains(lint::RULE_FRONTMATTER_UNKNOWN_KEY),
+        "stdout={stdout} stderr={stderr}"
+    );
 }
 
 #[test]

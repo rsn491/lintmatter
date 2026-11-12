@@ -76,7 +76,7 @@ lintmatter --strict --format json .
 | `frontmatter.not-first` | error | The fence does not open on line 1 |
 | `frontmatter.unterminated` | error | The opening fence is never closed |
 | `frontmatter.invalid` | error | Not parseable YAML, or not a mapping |
-| `frontmatter.unknown-key` | warning | Key outside `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` (the [Agent Skills spec](https://agentskills.io/specification#frontmatter) fields), plus the Claude Code extensions `disable-model-invocation` and `argument-hint` |
+| `frontmatter.unknown-key` | warning (off by default) | Key outside `name`, `description`, `license`, `compatibility`, `metadata`, `allowed-tools` (the [Agent Skills spec](https://agentskills.io/specification#frontmatter) fields), plus the Claude Code extensions `disable-model-invocation` and `argument-hint` |
 | `name.required` | error | `name` is present and a non-empty string |
 | `name.format` | error | `name` matches `^[a-z0-9]+(-[a-z0-9]+)*$` |
 | `name.length` | error | `name` is at most 64 characters |
@@ -92,7 +92,7 @@ lintmatter --strict --format json .
 
 Switch any of them off by id:
 ```sh
-lintmatter --disable name.dir-mismatch --disable frontmatter.unknown-key .
+lintmatter --disable name.dir-mismatch --disable name.format .
 ```
 
 Rules (along with token budgets and excludes) can also be set in a
