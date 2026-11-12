@@ -174,7 +174,7 @@ mod tests {
         let resolved = resolve(Settings::default(), file, false, vec![]);
 
         // Then
-        assert!(resolved.config.disabled.is_empty());
+        assert_eq!(resolved.config.disabled, Vec::<String>::new());
     }
 
     #[test]
