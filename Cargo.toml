@@ -62,14 +62,14 @@ saphyr = "0.3.3"
 regex = "1"
 glob = "0.3"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "2"
+serde_json = "1.0.154"
+thiserror = "2.0.21"
 terminal_size = "0.4"
 
 [dev-dependencies]
 # span-locations gives tests/architecture.rs line numbers for its findings.
 proc-macro2 = { version = "1", features = ["span-locations"] }
-syn = { version = "3", default-features = false, features = ["full", "parsing", "visit"] }
+syn = { version = "3.0.9", default-features = false, features = ["full", "parsing", "visit"] }
 tempfile = "3"
 
 [profile.release]
