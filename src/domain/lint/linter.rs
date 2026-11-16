@@ -657,6 +657,150 @@ mod tests {
     }
 
     #[test]
+    fn file_reference_rule_false_positives() {
+        // Given
+        // Each source is a shape found in a public skill repository. The rule
+        // must stay quiet on text that only looks like a reference, and still
+        // report the dangling links those same repositories really had.
+        use crate::domain::Severity::{Error, Warning};
+        let cases: &[(&str, &[&str], bool, &str, Vec<crate::domain::Severity>)] = &[
+            (
+                "a bare-word link target is a placeholder",
+                &[],
+                false,
+                "You might also like: [Title](URL) -- one sentence.\n",
+                vec![],
+            ),
+            (
+                "an angle-bracket slot is a placeholder",
+                &[],
+                false,
+                "Link it as [<TEAM-123>](<ticket url>).\n",
+                vec![],
+            ),
+            (
+                "a quoted reply template is not this file's link",
+                &[],
+                false,
+                "Reply with:\n\n> Per our [guide](../blob/master/CONTRIBUTING.md) we ask for more.\n",
+                vec![],
+            ),
+            (
+                "a link without ./ is still checked",
+                &[],
+                false,
+                "| [references/policies.md](references/policies.md) | Policy patterns |\n",
+                vec![Error],
+            ),
+            (
+                "a link to an extensionless path is still checked",
+                &[],
+                false,
+                "See the [query skill](query/SKILL.md) and [tools](bin/tool).\n",
+                vec![Error, Error],
+            ),
+            (
+                "a missing path in inline code only warns",
+                &[],
+                false,
+                "If you need a specific file, use a path such as `./main.js`.\n",
+                vec![Warning],
+            ),
+            (
+                "strict promotes the inline-code warning",
+                &[],
+                true,
+                "Write the payload to `./run/data/payload.json`.\n",
+                vec![Error],
+            ),
+            (
+                "a link and a span to one target report once, as the link",
+                &[],
+                false,
+                "See [it](./missing.md) or `./missing.md`.\n",
+                vec![Error],
+            ),
+            (
+                "an ignore glob covers a generated file",
+                &["./run/*"],
+                false,
+                "Write the payload to `./run/data/payload.json`.\n",
+                vec![],
+            ),
+            (
+                "an ignore glob need not repeat the leading ./",
+                &["*-guide.md"],
+                false,
+                "| [Contributor Guide](./contributor-guide.md) | New contributors |\n",
+                vec![],
+            ),
+            (
+                "an ignore glob leaves other targets alone",
+                &["./run/*"],
+                false,
+                "See [notes](./notes.md) and `./run/out.json`.\n",
+                vec![Error],
+            ),
+        ];
+
+        for (name, ignore, strict, src, want) in cases {
+            let dir = tempfile::tempdir().unwrap();
+            let target = agents_target(dir.path(), src);
+            let cfg = Config {
+                ignore_references: ignore.iter().map(ToString::to_string).collect(),
+                strict: *strict,
+                ..generous_config()
+            };
+
+            // When
+            let res = linter(cfg).file(&target).unwrap();
+
+            // Then
+            let got: Vec<_> = res.findings.iter().map(|f| f.severity).collect();
+            assert_eq!(got, *want, "{name}");
+            assert!(
+                res.findings
+                    .iter()
+                    .all(|f| f.rule == RULE_FILE_REFERENCE_MISSING),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
+    fn file_reference_code_spans_may_be_relative_to_the_root() {
+        // Given
+        // Prose in a nested file often names paths from the top of the tree.
+        // A link does not get that latitude: a renderer resolves it against
+        // the file's own directory, so there it really is broken.
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("skills").join("demo");
+        fs::create_dir_all(&sub).unwrap();
+        write_file(dir.path(), "config.json", "{}");
+        let span = agents_target_under(dir.path(), &sub, "Settings live in `./config.json`.\n");
+        let link_dir = tempfile::tempdir().unwrap();
+        let link_sub = link_dir.path().join("skills").join("demo");
+        fs::create_dir_all(&link_sub).unwrap();
+        write_file(link_dir.path(), "config.json", "{}");
+        let link = agents_target_under(
+            link_dir.path(),
+            &link_sub,
+            "Settings live in [config](./config.json).\n",
+        );
+
+        // When
+        let span_res = linter(generous_config()).file(&span).unwrap();
+        let link_res = linter(generous_config()).file(&link).unwrap();
+
+        // Then
+        assert!(span_res.findings.is_empty());
+        assert_eq!(
+            rule_ids(&link_res.findings),
+            vec![RULE_FILE_REFERENCE_MISSING]
+        );
+    }
+
+    #[test]
     fn file_reference_rule_nested_fences() {
         // Given
         // A fence closes only on the same marker, at least as long, with no

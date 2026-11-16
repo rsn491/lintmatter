@@ -27,6 +27,9 @@ pub struct Config {
     pub max_skill_description_tokens: i64,
     /// Rule ids to skip.
     pub disabled: Vec<String>,
+    /// Globs of reference targets `file-reference.missing` leaves alone:
+    /// files a skill generates at run time, or expects in the user's project.
+    pub ignore_references: Vec<String>,
     /// Treat warnings as errors.
     pub strict: bool,
 }
@@ -42,6 +45,7 @@ impl Default for Config {
             max_skill_name_tokens: DEFAULT_MAX_SKILL_NAME_TOKENS,
             max_skill_description_tokens: DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
             disabled: Vec::new(),
+            ignore_references: Vec::new(),
             strict: false,
         }
     }

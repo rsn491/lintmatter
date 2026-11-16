@@ -54,6 +54,42 @@ pub fn escape_control(s: &str) -> String {
         .collect()
 }
 
+/// Shell-style match of a whole string: `*` stands for any run of characters
+/// and `?` for exactly one. `*` crosses `/`, so `run/*` covers everything
+/// below `run/`; there is no separate `**`. Runs in time proportional to
+/// pattern length times text length, so a pattern from an untrusted config
+/// cannot make it backtrack exponentially.
+pub fn wildcard_match(pattern: &str, text: &str) -> bool {
+    let pattern: Vec<char> = pattern.chars().collect();
+    let text: Vec<char> = text.chars().collect();
+    let (mut p, mut t) = (0, 0);
+    // The last `*` seen and how much text it has swallowed so far.
+    let mut star: Option<(usize, usize)> = None;
+    while let Some(&ch) = text.get(t) {
+        match pattern.get(p) {
+            Some('*') => {
+                star = Some((p, t));
+                p += 1;
+            }
+            Some(&want) if want == '?' || want == ch => {
+                p += 1;
+                t += 1;
+            }
+            _ => {
+                let Some((star_p, star_t)) = star else {
+                    return false;
+                };
+                star = Some((star_p, star_t + 1));
+                p = star_p + 1;
+                t = star_t + 1;
+            }
+        }
+    }
+    pattern
+        .get(p..)
+        .is_some_and(|rest| rest.iter().all(|&c| c == '*'))
+}
+
 /// Lexically normalizes a path: resolves `.` and `..` textually, without
 /// touching the filesystem or following symlinks (mirroring Go's
 /// `filepath.Clean`). `..` above the root is dropped rather than escaping it.
@@ -90,6 +126,34 @@ pub fn ceil_div(a: usize, b: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wildcard_match_covers_the_whole_string() {
+        // Given
+        let cases: &[(&str, &str, bool)] = &[
+            ("run/*", "run/data/out.json", true),
+            ("run/*", "run", false),
+            ("*.json", "run/data/out.json", true),
+            ("*.json", "out.jsonl", false),
+            ("*-guide.md", "contributor-guide.md", true),
+            ("llms.txt", "llms.txt", true),
+            ("llms.txt", "wiki/llms.txt", false),
+            ("a?c", "abc", true),
+            ("a?c", "ac", false),
+            ("a*b*c", "a--b--b--c", true),
+            ("a*b*c", "a--b--b--", false),
+            ("*", "", true),
+            ("", "", true),
+            ("", "x", false),
+        ];
+        for (pattern, text, want) in cases {
+            // When
+            let got = wildcard_match(pattern, text);
+
+            // Then
+            assert_eq!(got, *want, "wildcard_match({pattern:?}, {text:?})");
+        }
+    }
 
     #[test]
     fn humanize_formats_with_separators() {

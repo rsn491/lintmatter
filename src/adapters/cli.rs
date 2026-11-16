@@ -40,13 +40,15 @@ kinds, token budgets are enforced on the content, and on a skill's name and
 description.";
 
 const AFTER_HELP: &str = "\
-Token budgets, excludes and rules can also live in a config file: the nearest
+Token budgets, excludes, ignored references and rules can also live in a config file: the nearest
 .lintmatter.yaml (or .lintmatter.yml) at or above the working directory is read
 automatically. Flags win over the file.
 
   max-skill-tokens: 3000
   exclude:
     - testdata
+  ignore-references:
+    - ./run/*
   rules:
     name.dir-mismatch: false
 
@@ -106,6 +108,9 @@ struct Flags {
     /// Glob of paths to skip; repeatable
     #[arg(long = "exclude", value_name = "GLOB", value_parser = NonEmptyStringValueParser::new())]
     excludes: Vec<String>,
+    /// Glob of reference targets file-reference.missing skips; repeatable
+    #[arg(long = "ignore-reference", value_name = "GLOB", value_parser = NonEmptyStringValueParser::new())]
+    ignore_references: Vec<String>,
     /// Rule id to skip; repeatable
     #[arg(long = "disable", value_name = "RULE", value_parser = NonEmptyStringValueParser::new())]
     disabled: Vec<String>,
@@ -193,6 +198,7 @@ impl Cli {
             excludes: f.excludes,
             disabled: f.disabled,
             enabled: Vec::new(),
+            ignore_references: f.ignore_references,
         };
         Ok(Cli {
             settings: settings::resolve(flags, file_cfg, f.strict, f.paths),

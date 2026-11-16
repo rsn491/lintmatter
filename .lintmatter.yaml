@@ -7,3 +7,8 @@ exclude:
 # Example: switch a rule off by id (see `lintmatter --list-rules`).
 # rules:
 #   name.dir-mismatch: false
+
+# Example: reference targets file-reference.missing should not look for,
+# such as files a skill writes at run time.
+# ignore-references:
+#   - ./run/*

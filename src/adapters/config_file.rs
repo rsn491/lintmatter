@@ -29,6 +29,7 @@ const KNOWN_KEYS: &[&str] = &[
     "max-skill-name-tokens",
     "max-skill-description-tokens",
     "exclude",
+    "ignore-references",
     "rules",
 ];
 
@@ -147,6 +148,7 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
                 cfg.max_skill_description_tokens = Some(budget(path, &name, value)?);
             }
             "exclude" => cfg.excludes = string_list(path, &name, value)?,
+            "ignore-references" => cfg.ignore_references = string_list(path, &name, value)?,
             "rules" => (cfg.disabled, cfg.enabled) = rules(path, value)?,
             _ => return Err(invalid(path, line, Problem::UnknownSetting(name))),
         }
@@ -264,6 +266,8 @@ max-skill-description-tokens: 64
 exclude:
   - testdata
   - "examples/**"
+ignore-references:
+  - "./run/*"
 rules:
   name.dir-mismatch: false
   frontmatter.unknown-key: off
@@ -288,6 +292,7 @@ rules:
                     "frontmatter.unknown-key".to_string(),
                 ],
                 enabled: vec!["tokens.content".to_string()],
+                ignore_references: vec!["./run/*".to_string()],
             }
         );
     }

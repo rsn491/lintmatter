@@ -67,6 +67,7 @@ lintmatter --strict --format json .
 | `--max-skill-tokens` | `5000` | Body token budget for `SKILL.md` |
 | `--max-skill-name-tokens` | `16` | Budget for a skill's `name` |
 | `--max-skill-description-tokens` | `100` | Budget for a skill's `description` |
+| `--ignore-reference` | none | Glob of reference targets `file-reference.missing` skips; repeatable (`ignore-references:` in the config file) |
 
 ### Rules
 
@@ -88,7 +89,25 @@ lintmatter --strict --format json .
 | `tokens.content` | error | Body within its token budget |
 | `tokens.name` | error | `name` within its token budget |
 | `tokens.description` | error | `description` within its token budget |
-| `file-reference.missing` | error | Every relative markdown link outside inline code, and every `./`- or `../`-prefixed file path in inline code, resolves to a file that exists |
+| `file-reference.missing` | error for links, warning for inline code | Every relative markdown link outside inline code, and every `./`- or `../`-prefixed file path in inline code, resolves to a file that exists |
+
+`file-reference.missing` tries not to flag text that only looks like a reference:
+
+- A markdown link must resolve relative to the file it is in; a miss is an
+  error. A path in inline code may also resolve from the root of the linted
+  tree, and a miss is only a warning, since prose uses that form for example
+  paths and for files in the reader's own project too.
+- Blockquoted lines (`> ...`) and placeholder link targets (`[Title](URL)`,
+  `[x](<ticket url>)`) are skipped. So is a link whose target is a bare word
+  with no `/` or `.`.
+- Files a skill generates at run time can be listed once, as globs matched
+  against the target as written (`*` crosses `/`, a leading `./` is optional):
+
+  ```yaml
+  ignore-references:
+    - ./run/*
+    - "*-guide.md"
+  ```
 
 Switch any of them off by id:
 ```sh

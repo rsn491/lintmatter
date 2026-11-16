@@ -28,6 +28,8 @@ pub struct Settings {
     pub disabled: Vec<String>,
     /// Rule ids to switch on, overriding `DEFAULT_DISABLED_RULES`.
     pub enabled: Vec<String>,
+    /// Globs of reference targets the file-reference rule skips.
+    pub ignore_references: Vec<String>,
 }
 
 /// What a run actually uses once every source has been merged.
@@ -39,7 +41,8 @@ pub struct RunSettings {
 }
 
 /// Merges flags over config-file settings over the built-in defaults. Lists
-/// accumulate instead of overriding: `--exclude` and `--disable` add to
+/// accumulate instead of overriding: `--exclude`, `--disable` and
+/// `--ignore-reference` add to
 /// whatever the file already asked for, since narrowing a run further on the
 /// command line is the common case. `strict` and `paths` come from the
 /// command line alone: the config file has no say over them.
@@ -53,6 +56,8 @@ pub fn resolve(flags: Settings, file: Settings, strict: bool, paths: Vec<String>
         .collect();
     disabled.extend(file.disabled);
     disabled.extend(flags.disabled);
+    let mut ignore_references = file.ignore_references;
+    ignore_references.extend(flags.ignore_references);
 
     RunSettings {
         config: Config {
@@ -73,6 +78,7 @@ pub fn resolve(flags: Settings, file: Settings, strict: bool, paths: Vec<String>
                 .or(file.max_skill_description_tokens)
                 .unwrap_or(DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS),
             disabled,
+            ignore_references,
             strict,
         },
         excludes,
@@ -139,12 +145,14 @@ mod tests {
             max_skill_tokens: Some(9),
             excludes: vec!["b".into()],
             disabled: vec!["name.format".into()],
+            ignore_references: vec!["./d".into()],
             ..Default::default()
         };
         let file = Settings {
             max_skill_tokens: Some(7),
             excludes: vec!["a".into()],
             disabled: vec!["name.length".into()],
+            ignore_references: vec!["./c".into()],
             ..Default::default()
         };
 
@@ -158,6 +166,7 @@ mod tests {
             resolved.config.disabled,
             vec!["frontmatter.unknown-key", "name.length", "name.format"]
         );
+        assert_eq!(resolved.config.ignore_references, vec!["./c", "./d"]);
         assert!(resolved.config.strict);
         assert_eq!(resolved.paths, vec!["x"]);
     }

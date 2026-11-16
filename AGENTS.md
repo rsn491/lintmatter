@@ -29,7 +29,8 @@ and each has an allowlist of `[dependencies]` crates.
 - `src/main.rs` calls `adapters::cli::run`. `src/lib.rs` lists the layers; the
   crate is also a library so `web/` reads the default budgets
   (`domain::config`) instead of restating them. `src/utils.rs` holds pure
-  helpers (`humanize`, `plural`, `to_slash`, `clean_path`, `ceil_div`).
+  helpers (`humanize`, `plural`, `to_slash`, `clean_path`, `ceil_div`,
+  `wildcard_match`).
 - `src/domain/` — the pure core, no I/O. The model: `kind.rs`, `target.rs`,
   `finding.rs`, `summary.rs`, `config.rs` (`Config`, `DEFAULT_MAX_*`).
   `document.rs` (`Document::parse`; `mapping` is `Some` only when the front

@@ -593,6 +593,44 @@ fn excludes_and_disables_accumulate() {
 }
 
 #[test]
+fn ignored_references_accumulate_and_spans_only_warn() {
+    // Given
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = write_config(&dir, "ignore-references:\n  - ./generated.md\n");
+    let agents = dir.path().join("AGENTS.md");
+    std::fs::write(
+        &agents,
+        "See [a](./generated.md), [b](./built.md) and `./example.json`.\n",
+    )
+    .unwrap();
+    let agents = agents.to_string_lossy().to_string();
+
+    // When
+    let (bare_code, bare_out, _) = run_raw(&["--no-config", &agents]);
+    let (file_code, file_out, _) = run_raw(&["--config", &cfg, &agents]);
+    let (code, stdout, _) = run_raw(&["--config", &cfg, "--ignore-reference", "built.*", &agents]);
+    let (strict_code, ..) = run_raw(&[
+        "--config",
+        &cfg,
+        "--ignore-reference",
+        "built.*",
+        "--strict",
+        &agents,
+    ]);
+
+    // Then
+    assert_eq!(bare_code, EXIT_FINDINGS, "{bare_out}");
+    assert!(bare_out.contains("generated.md"), "{bare_out}");
+    assert_eq!(file_code, EXIT_FINDINGS, "{file_out}");
+    assert!(!file_out.contains("generated.md"), "{file_out}");
+    assert!(file_out.contains("built.md"), "{file_out}");
+    // Only the inline-code path is left, and that is a warning.
+    assert_eq!(code, EXIT_OK, "{stdout}");
+    assert!(stdout.contains("example.json"), "{stdout}");
+    assert_eq!(strict_code, EXIT_FINDINGS);
+}
+
+#[test]
 fn no_config_ignores_the_file() {
     // Given
     let dir = tempfile::tempdir().unwrap();
