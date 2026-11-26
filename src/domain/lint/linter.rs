@@ -350,7 +350,7 @@ mod tests {
             "{}",
             res.findings[0].message
         );
-        assert!(rule_ids(&plain_res.findings).is_empty());
+        assert_eq!(rule_ids(&plain_res.findings), Vec::<&str>::new());
         assert!(res.tokens.description > plain_res.tokens.description);
     }
 
