@@ -66,7 +66,7 @@ lintmatter --strict --format json .
 | `--max-agents-tokens` | `2500` | Body token budget for `AGENTS.md` |
 | `--max-skill-tokens` | `5000` | Body token budget for `SKILL.md` |
 | `--max-skill-name-tokens` | `16` | Budget for a skill's `name` |
-| `--max-skill-description-tokens` | `100` | Budget for a skill's `description` |
+| `--max-skill-description-tokens` | `100` | Budget for a skill's `description`, plus `when_to_use` when present |
 
 ### Rules
 
@@ -87,7 +87,7 @@ lintmatter --strict --format json .
 | `metadata.type` | error | A mapping when present |
 | `tokens.content` | error | Body within its token budget |
 | `tokens.name` | error | `name` within its token budget |
-| `tokens.description` | error | `description` within its token budget |
+| `tokens.description` | error | `description` (plus `when_to_use`, which Claude Code lists beside it) within its token budget |
 | `file-reference.missing` | error | Every relative markdown link outside inline code, and every `./`- or `../`-prefixed file path in inline code, resolves to a file that exists |
 
 Switch any of them off by id:

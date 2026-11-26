@@ -60,10 +60,14 @@ impl Linter {
         };
         let name = fm.and_then(|f| non_empty(f.string("name")));
         let description = fm.and_then(|f| non_empty(f.string("description")));
+        // Claude Code appends `when_to_use` to the description in the skill
+        // listing it always loads, so the two share the description budget.
+        let when_to_use = fm.and_then(|f| non_empty(f.string("when_to_use")));
+        let count = |s: Option<&str>| s.map_or(0, |s| self.counter.count(s));
         let tokens = Counts {
             content: self.counter.count(&doc.body),
-            name: name.as_deref().map_or(0, |s| self.counter.count(s)),
-            description: description.as_deref().map_or(0, |s| self.counter.count(s)),
+            name: count(name.as_deref()),
+            description: count(description.as_deref()) + count(when_to_use.as_deref()),
         };
 
         let mut findings = Vec::new();
@@ -312,6 +316,42 @@ mod tests {
                 && generous_res.tokens.name > 0
                 && generous_res.tokens.description > 0
         );
+    }
+
+    #[test]
+    fn when_to_use_shares_the_description_budget() {
+        // Given
+        let when = "Use this skill whenever the user asks to review, refactor or audit any part of the codebase.";
+        let (_base, target) = write_skill(
+            "listed",
+            &format!(
+                "---\nname: listed\ndescription: Reviews code.\nwhen_to_use: {when}\n---\nBody.\n"
+            ),
+        );
+        let (_plain_base, plain) = write_skill(
+            "listed",
+            "---\nname: listed\ndescription: Reviews code.\n---\nBody.\n",
+        );
+        let mut cfg = generous_config();
+        cfg.max_skill_description_tokens = 10;
+        // Budgets only: whether `when_to_use` is a known key is not this test's question.
+        cfg.disabled = vec![RULE_FRONTMATTER_UNKNOWN_KEY.to_string()];
+
+        // When
+        let res = linter(cfg.clone()).file(&target).unwrap();
+        let plain_res = linter(cfg).file(&plain).unwrap();
+
+        // Then
+        assert_eq!(rule_ids(&res.findings), vec![RULE_TOKENS_DESCRIPTION]);
+        assert!(
+            res.findings[0]
+                .message
+                .starts_with("description + when_to_use is "),
+            "{}",
+            res.findings[0].message
+        );
+        assert!(rule_ids(&plain_res.findings).is_empty());
+        assert!(res.tokens.description > plain_res.tokens.description);
     }
 
     #[test]
