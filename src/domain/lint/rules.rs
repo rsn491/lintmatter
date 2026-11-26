@@ -2,6 +2,7 @@
 
 pub mod description;
 pub mod frontmatter;
+pub mod lines;
 pub mod name;
 pub mod references;
 mod registry;

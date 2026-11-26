@@ -56,6 +56,7 @@ pub(super) fn generous_config() -> Config {
         max_skill_tokens: 0,
         max_skill_name_tokens: 0,
         max_skill_description_tokens: 0,
+        max_skill_lines: 0,
         disabled: vec![],
         strict: false,
     }

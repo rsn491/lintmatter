@@ -64,6 +64,7 @@ impl Linter {
             content: self.counter.count(&doc.body),
             name: name.as_deref().map_or(0, |s| self.counter.count(s)),
             description: description.as_deref().map_or(0, |s| self.counter.count(s)),
+            lines: doc.body.lines().count(),
         };
 
         let mut findings = Vec::new();
@@ -113,8 +114,9 @@ fn non_empty(raw: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::Severity;
     use crate::domain::config::{
-        DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
+        DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_LINES,
         DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
     };
     use crate::domain::lint::ids::*;
@@ -315,6 +317,31 @@ mod tests {
     }
 
     #[test]
+    fn line_budget() {
+        // Given
+        let (_base, target) = write_skill(
+            "long-skill",
+            "---\nname: long-skill\ndescription: A skill with a three-line body.\n---\none\ntwo\nthree\n",
+        );
+        let cfg_with = |lines| Config {
+            max_skill_lines: lines,
+            ..generous_config()
+        };
+
+        // When
+        let over = linter(cfg_with(2)).file(&target).unwrap();
+        let at = linter(cfg_with(3)).file(&target).unwrap();
+        let off = linter(cfg_with(0)).file(&target).unwrap();
+
+        // Then
+        assert_eq!(rule_ids(&over.findings), vec![RULE_LINES_CONTENT]);
+        assert_eq!(over.findings[0].severity, Severity::Warning);
+        assert!(at.findings.is_empty());
+        assert!(off.findings.is_empty());
+        assert_eq!(over.tokens.lines, 3);
+    }
+
+    #[test]
     fn per_kind_content_budget() {
         // Given
         let base = tempfile::tempdir().unwrap();
@@ -479,6 +506,7 @@ mod tests {
             cfg.max_skill_description_tokens,
             DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS
         );
+        assert_eq!(cfg.max_skill_lines, DEFAULT_MAX_SKILL_LINES);
         assert_eq!(rule_ids(&res.findings), vec![RULE_TOKENS_CONTENT]);
     }
 

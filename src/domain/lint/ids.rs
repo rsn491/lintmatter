@@ -22,6 +22,7 @@ pub const RULE_METADATA_TYPE: &str = "metadata.type";
 pub const RULE_TOKENS_CONTENT: &str = "tokens.content";
 pub const RULE_TOKENS_NAME: &str = "tokens.name";
 pub const RULE_TOKENS_DESCRIPTION: &str = "tokens.description";
+pub const RULE_LINES_CONTENT: &str = "lines.content";
 pub const RULE_FILE_REFERENCE_MISSING: &str = "file-reference.missing";
 
 /// Limits from the Anthropic skill spec, in characters.
