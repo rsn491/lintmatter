@@ -5,7 +5,7 @@
 
 use crate::domain::lint::rule::Rule;
 
-use super::{description, frontmatter, name, references, schema, tokens};
+use super::{description, frontmatter, lines, name, references, schema, tokens};
 
 /// Every rule, in report order.
 static ALL: &[&dyn Rule] = &[
@@ -25,6 +25,7 @@ static ALL: &[&dyn Rule] = &[
     &tokens::Content,
     &tokens::Name,
     &tokens::Description,
+    &lines::Content,
     &references::Missing,
 ];
 

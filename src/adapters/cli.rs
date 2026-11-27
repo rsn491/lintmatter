@@ -16,8 +16,8 @@ use crate::adapters::report;
 use crate::application::settings::{self, RunSettings, Settings, UnknownRules};
 use crate::application::{LintRun, Outcome};
 use crate::domain::config::{
-    DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_NAME_TOKENS,
-    DEFAULT_MAX_SKILL_TOKENS,
+    DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS, DEFAULT_MAX_SKILL_LINES,
+    DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
 };
 use crate::domain::lint::{self, Linter};
 
@@ -103,6 +103,9 @@ struct Flags {
     #[arg(long, value_name = "INT", value_parser = budget, allow_negative_numbers = true,
         help = format!("Token budget for a skill's description, 0 disables [default: {DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS}]"))]
     max_skill_description_tokens: Option<i64>,
+    #[arg(long, value_name = "INT", value_parser = budget, allow_negative_numbers = true,
+        help = format!("Line budget for SKILL.md content, 0 disables [default: {DEFAULT_MAX_SKILL_LINES}]"))]
+    max_skill_lines: Option<i64>,
     /// Glob of paths to skip; repeatable
     #[arg(long = "exclude", value_name = "GLOB", value_parser = NonEmptyStringValueParser::new())]
     excludes: Vec<String>,
@@ -190,6 +193,7 @@ impl Cli {
             max_skill_tokens: f.max_skill_tokens,
             max_skill_name_tokens: f.max_skill_name_tokens,
             max_skill_description_tokens: f.max_skill_description_tokens,
+            max_skill_lines: f.max_skill_lines,
             excludes: f.excludes,
             disabled: f.disabled,
             enabled: Vec::new(),

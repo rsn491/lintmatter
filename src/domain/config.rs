@@ -8,6 +8,8 @@ pub const DEFAULT_MAX_AGENTS_TOKENS: i64 = 2500;
 pub const DEFAULT_MAX_SKILL_TOKENS: i64 = 5000;
 pub const DEFAULT_MAX_SKILL_NAME_TOKENS: i64 = 16;
 pub const DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS: i64 = 100;
+/// Anthropic's skill guidance: keep the SKILL.md body under 500 lines.
+pub const DEFAULT_MAX_SKILL_LINES: i64 = 500;
 
 /// Rules that are off until a config file's `rules:` mapping turns them on.
 /// Not part of `Config::default`: that keeps every rule running so the linter
@@ -25,6 +27,8 @@ pub struct Config {
     /// Skill-only budgets. Zero disables the check.
     pub max_skill_name_tokens: i64,
     pub max_skill_description_tokens: i64,
+    /// Line budget for a SKILL.md body. Zero disables the check.
+    pub max_skill_lines: i64,
     /// Rule ids to skip.
     pub disabled: Vec<String>,
     /// Treat warnings as errors.
@@ -41,6 +45,7 @@ impl Default for Config {
             max_skill_tokens: DEFAULT_MAX_SKILL_TOKENS,
             max_skill_name_tokens: DEFAULT_MAX_SKILL_NAME_TOKENS,
             max_skill_description_tokens: DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
+            max_skill_lines: DEFAULT_MAX_SKILL_LINES,
             disabled: Vec::new(),
             strict: false,
         }

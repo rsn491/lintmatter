@@ -27,12 +27,13 @@ pub struct Finding {
     pub message: String,
 }
 
-/// The measured token cost of a file's parts.
+/// The measured token cost of a file's parts, plus the body's length in lines.
 #[derive(Debug, Clone, Default)]
 pub struct Counts {
     pub content: usize,
     pub name: usize,
     pub description: usize,
+    pub lines: usize,
 }
 
 /// Everything lintmatter learned about one file.

@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use crate::domain::Config;
 use crate::domain::config::{
     DEFAULT_DISABLED_RULES, DEFAULT_MAX_AGENTS_TOKENS, DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS,
-    DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
+    DEFAULT_MAX_SKILL_LINES, DEFAULT_MAX_SKILL_NAME_TOKENS, DEFAULT_MAX_SKILL_TOKENS,
 };
 use crate::domain::lint::RULES;
 
@@ -22,6 +22,7 @@ pub struct Settings {
     pub max_skill_tokens: Option<i64>,
     pub max_skill_name_tokens: Option<i64>,
     pub max_skill_description_tokens: Option<i64>,
+    pub max_skill_lines: Option<i64>,
     /// Globs of paths to skip.
     pub excludes: Vec<String>,
     /// Rule ids to switch off.
@@ -72,6 +73,10 @@ pub fn resolve(flags: Settings, file: Settings, strict: bool, paths: Vec<String>
                 .max_skill_description_tokens
                 .or(file.max_skill_description_tokens)
                 .unwrap_or(DEFAULT_MAX_SKILL_DESCRIPTION_TOKENS),
+            max_skill_lines: flags
+                .max_skill_lines
+                .or(file.max_skill_lines)
+                .unwrap_or(DEFAULT_MAX_SKILL_LINES),
             disabled,
             strict,
         },

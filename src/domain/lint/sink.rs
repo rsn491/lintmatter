@@ -31,7 +31,9 @@ pub(super) fn part(rule: &str) -> Option<Part> {
         | RULE_DESCRIPTION_LENGTH
         | RULE_ALLOWED_TOOLS_TYPE
         | RULE_METADATA_TYPE => Some(Part::Frontmatter),
-        RULE_TOKENS_CONTENT | RULE_TOKENS_NAME | RULE_TOKENS_DESCRIPTION => Some(Part::Tokens),
+        RULE_TOKENS_CONTENT | RULE_TOKENS_NAME | RULE_TOKENS_DESCRIPTION | RULE_LINES_CONTENT => {
+            Some(Part::Tokens)
+        }
         RULE_FILE_REFERENCE_MISSING => Some(Part::FileReferences),
         _ => None,
     }

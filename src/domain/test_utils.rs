@@ -10,6 +10,7 @@ pub(crate) fn results() -> Vec<FileResult> {
                 content: 6142,
                 name: 0,
                 description: 0,
+                lines: 0,
             },
             score: 50,
             findings: vec![Finding {
@@ -26,6 +27,7 @@ pub(crate) fn results() -> Vec<FileResult> {
                 content: 120,
                 name: 2,
                 description: 30,
+                lines: 14,
             },
             score: 96,
             findings: vec![Finding {

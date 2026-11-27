@@ -23,8 +23,8 @@ pub(super) fn score(tokens: &Counts, cfg: &Config, kind: Kind, tally: &Tally) ->
     }
 
     // One sub-score per budget that was actually checked, averaged, so a
-    // skill's name and description weigh against its body rather than beside
-    // the other two components.
+    // skill's name, description and line count weigh against its body's
+    // tokens rather than beside the other two components.
     let budgets: Vec<f64> = [
         (RULE_TOKENS_CONTENT, tokens.content, cfg.content_limit(kind)),
         (RULE_TOKENS_NAME, tokens.name, cfg.max_skill_name_tokens),
@@ -33,6 +33,7 @@ pub(super) fn score(tokens: &Counts, cfg: &Config, kind: Kind, tally: &Tally) ->
             tokens.description,
             cfg.max_skill_description_tokens,
         ),
+        (RULE_LINES_CONTENT, tokens.lines, cfg.max_skill_lines),
     ]
     .into_iter()
     .filter(|(rule, _, _)| tally.applied.contains(rule))

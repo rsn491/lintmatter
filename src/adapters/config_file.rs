@@ -28,6 +28,7 @@ const KNOWN_KEYS: &[&str] = &[
     "max-skill-tokens",
     "max-skill-name-tokens",
     "max-skill-description-tokens",
+    "max-skill-lines",
     "exclude",
     "rules",
 ];
@@ -146,6 +147,7 @@ pub fn parse(src: &str, path: &str) -> Result<Settings, ConfigError> {
             "max-skill-description-tokens" => {
                 cfg.max_skill_description_tokens = Some(budget(path, &name, value)?);
             }
+            "max-skill-lines" => cfg.max_skill_lines = Some(budget(path, &name, value)?),
             "exclude" => cfg.excludes = string_list(path, &name, value)?,
             "rules" => (cfg.disabled, cfg.enabled) = rules(path, value)?,
             _ => return Err(invalid(path, line, Problem::UnknownSetting(name))),
@@ -261,6 +263,7 @@ max-agents-tokens: 1200
 max-skill-tokens: 0
 max-skill-name-tokens: 8
 max-skill-description-tokens: 64
+max-skill-lines: 300
 exclude:
   - testdata
   - "examples/**"
@@ -281,6 +284,7 @@ rules:
                 max_skill_tokens: Some(0),
                 max_skill_name_tokens: Some(8),
                 max_skill_description_tokens: Some(64),
+                max_skill_lines: Some(300),
                 excludes: vec!["testdata".to_string(), "examples/**".to_string()],
                 // Rules are collected by direction, in file order.
                 disabled: vec![

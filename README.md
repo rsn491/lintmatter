@@ -67,6 +67,7 @@ lintmatter --strict --format json .
 | `--max-skill-tokens` | `5000` | Body token budget for `SKILL.md` |
 | `--max-skill-name-tokens` | `16` | Budget for a skill's `name` |
 | `--max-skill-description-tokens` | `100` | Budget for a skill's `description` |
+| `--max-skill-lines` | `500` | Line budget for `SKILL.md` |
 
 ### Rules
 
@@ -88,6 +89,7 @@ lintmatter --strict --format json .
 | `tokens.content` | error | Body within its token budget |
 | `tokens.name` | error | `name` within its token budget |
 | `tokens.description` | error | `description` within its token budget |
+| `lines.content` | warning | `SKILL.md` body within its line budget |
 | `file-reference.missing` | error | Every relative markdown link outside inline code, and every `./`- or `../`-prefixed file path in inline code, resolves to a file that exists |
 
 Switch any of them off by id:
@@ -106,7 +108,7 @@ Each file is rated 0–100 as the mean of three parts:
 | Part | How it rates |
 | --- | --- |
 | Front matter | Frontmatter rules that passed ÷ frontmatter rules applied |
-| Token budgets | 100 if within the budget, reaching 0 once a file is double its budget. E.g. 10% over budget scores 90; 50% over scores 50. A skill's `name` and `description` budgets average in with its body |
+| Budgets | 100 if within the budget, reaching 0 once a file is double its budget. E.g. 10% over budget scores 90; 50% over scores 50. A skill's `name`, `description` and line budgets average in with its body's token budget |
 | File references | 100 if every checked reference resolves, 0 if any is broken |
 
 Scores are rounded down, so a file rates only the band it has fully earned:
