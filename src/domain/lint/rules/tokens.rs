@@ -84,10 +84,18 @@ impl Rule for Description {
             return;
         }
         sink.applies();
+        let what = if fm
+            .string("when_to_use")
+            .is_some_and(|s| !s.trim().is_empty())
+        {
+            "description + when_to_use"
+        } else {
+            "description"
+        };
         over_budget(
             sink,
             fm.line("description"),
-            "description",
+            what,
             ctx.tokens.description,
             ctx.cfg.max_skill_description_tokens,
         );
