@@ -68,19 +68,7 @@ lintmatter --strict --format json .
 | `--max-skill-name-tokens` | `16` | Budget for a skill's `name` |
 | `--max-skill-description-tokens` | `100` | Budget for a skill's `description` |
 
-The default budgets follow published guidance:
-
-- **Skill body, 5000 tokens.** The [Agent Skills spec](https://agentskills.io/specification)
-  recommends keeping instructions under 5000 tokens, and Anthropic's
-  [skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview)
-  budgets a loaded skill at "under 5k tokens".
-- **Skill `name` and `description`, 16 and 100 tokens.** Anthropic counts a skill's
-  always-loaded metadata at about 100 tokens. Both budgets sit inside the spec's hard
-  limits of 64 and 1024 characters, which `name.length` and `description.length` enforce.
-- **`AGENTS.md`, 2500 tokens.** Claude Code's [memory docs](https://code.claude.com/docs/en/memory)
-  say to target under 200 lines per instruction file, which is about 2.5k tokens. That is well
-  inside Codex's [32 KiB combined cap](https://developers.openai.com/codex/guides/agents-md)
-  (`project_doc_max_bytes`).
+The defaults follow published guidance; see [docs/budgets.md](docs/budgets.md) for the sources.
 
 ### Rules
 
