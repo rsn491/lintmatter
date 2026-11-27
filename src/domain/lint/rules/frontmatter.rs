@@ -14,6 +14,7 @@ use crate::domain::lint::{
 
 /// The front-matter keys the skill spec defines, plus the fields Claude Code
 /// documents for its skills. Anything else is reported as an unknown key.
+/// `docs/frontmatter-keys.md` lists them for users; keep the two in step.
 static KNOWN_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         "name",
