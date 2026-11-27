@@ -40,6 +40,43 @@ bump_action() {
   printf '%s' "$out" > "$file"
 }
 
+# CHANGELOG.md: move the `Unreleased` entries under a dated heading for this
+# version and repoint the compare links, so release notes never depend on
+# someone remembering to do it by hand.
+bump_changelog() {
+  local file="$1" line out="" in_unreleased=false has_entries=false prev="" base today
+  today="$(date -u +%F)"
+  grep -qx '## \[Unreleased\]' "$file" || { echo "no [Unreleased] heading in $file" >&2; exit 1; }
+  ! grep -q "^## \[$version\]" "$file" || { echo "$file already has $version" >&2; exit 1; }
+  prev="$(sed -n 's|^\[Unreleased\]: .*/compare/v\(.*\)\.\.\.HEAD$|\1|p' "$file")"
+  [[ -n "$prev" ]] || { echo "no [Unreleased] compare link in $file" >&2; exit 1; }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == '## [Unreleased]' ]]; then
+      in_unreleased=true
+    elif [[ "$line" == '## ['* ]]; then
+      in_unreleased=false
+    elif [[ $in_unreleased == true && -n "$line" ]]; then
+      has_entries=true
+    fi
+  done < "$file"
+  [[ $has_entries == true ]] || { echo "$file has nothing under [Unreleased]; add entries before releasing" >&2; exit 1; }
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in
+      '## [Unreleased]')
+        line+=$'\n\n'"## [$version] - $today"
+        ;;
+      '[Unreleased]: '*)
+        base="${line#\[Unreleased\]: }"
+        base="${base%%/compare/*}"
+        line="[Unreleased]: $base/compare/v$version...HEAD"$'\n'"[$version]: $base/compare/v$prev...v$version"
+        ;;
+    esac
+    out+="$line"$'\n'
+  done < "$file"
+  printf '%s' "$out" > "$file"
+}
+
+bump_changelog CHANGELOG.md
 bump_cargo Cargo.toml
 bump_cargo web/Cargo.toml
 bump_action action.yml

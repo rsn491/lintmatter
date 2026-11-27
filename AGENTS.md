@@ -14,7 +14,11 @@ cargo test --workspace
 
 ## Releasing
 
-Run `scripts/bump-version.sh X.Y.Z` before tagging. The version lives in
+Every user-visible PR adds a line under `## [Unreleased]` in `CHANGELOG.md`
+(Keep a Changelog groups). Run `scripts/bump-version.sh X.Y.Z` before tagging;
+it refuses an empty `Unreleased`, moves it under `## [X.Y.Z] - date` and fixes
+the compare links. The cargo-dist release workflow reads that section as the
+GitHub Release notes. The version lives in
 `Cargo.toml`, `web/Cargo.toml` and `action.yml`'s `version` default, and CI
 (`.github/action/test.sh`) fails if they drift apart.
 
