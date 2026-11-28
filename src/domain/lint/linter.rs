@@ -242,6 +242,12 @@ mod tests {
                 vec![],
             ),
             (
+                "Claude Code keys are accepted",
+                "claude-keys",
+                "---\nname: claude-keys\ndescription: A skill using Claude Code keys.\nwhen_to_use: When asked.\nuser-invocable: false\nmodel: sonnet\npaths:\n  - src/**\n---\nBody.\n".to_string(),
+                vec![],
+            ),
+            (
                 "allowed-tools wrong type",
                 "bad-tools",
                 "---\nname: bad-tools\ndescription: A skill with a malformed tool list.\nallowed-tools:\n  read: true\n---\nBody.\n".to_string(),

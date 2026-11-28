@@ -12,9 +12,9 @@ use crate::domain::lint::{
     RULE_FRONTMATTER_NOT_FIRST, RULE_FRONTMATTER_UNKNOWN_KEY, RULE_FRONTMATTER_UNTERMINATED,
 };
 
-/// The front-matter keys the skill spec defines, plus the Claude Code
-/// extensions lintmatter additionally supports. Anything else is reported as an
-/// unknown key.
+/// The front-matter keys the skill spec defines, plus the fields Claude Code
+/// documents for its skills. Anything else is reported as an unknown key.
+/// `docs/frontmatter-keys.md` lists them for users; keep the two in step.
 static KNOWN_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     [
         "name",
@@ -23,8 +23,21 @@ static KNOWN_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
         "compatibility",
         "metadata",
         "allowed-tools",
-        "disable-model-invocation",
+        // Claude Code extensions.
+        "when_to_use",
         "argument-hint",
+        "arguments",
+        "disable-model-invocation",
+        "user-invocable",
+        "disallowed-tools",
+        "model",
+        "effort",
+        "context",
+        "agent",
+        "background",
+        "hooks",
+        "paths",
+        "shell",
     ]
     .into_iter()
     .collect()
