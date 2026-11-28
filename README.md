@@ -68,6 +68,8 @@ lintmatter --strict --format json .
 | `--max-skill-name-tokens` | `16` | Budget for a skill's `name` |
 | `--max-skill-description-tokens` | `100` | Budget for a skill's `description`, plus `when_to_use` when present |
 
+The defaults follow published guidance; see [docs/budgets.md](docs/budgets.md) for the sources.
+
 ### Rules
 
 | Rule | Severity | Check |
