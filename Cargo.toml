@@ -36,7 +36,7 @@ print_stderr = "warn"
 
 [package]
 name = "lintmatter"
-version = "0.2.1"
+version = "0.2.2"
 publish = ["crates-io"]
 edition = "2024"
 rust-version = "1.93"
